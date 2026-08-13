@@ -264,88 +264,25 @@ class _AttendancerequestsState extends ConsumerState<Attendancerequests> {
                                               ),
                                             ]),
                                             "Request Details", approve: () {
-                                          showDialog(
-                                              context: context,
-                                              builder: (dialogContext) =>
-                                                  showConfirmAlertDialog(
-                                                      context,
-                                                      Form(
-                                                          key: reasonKey,
-                                                          child: Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              TextFormField(
-                                                                maxLines: 5,
-                                                                controller:
-                                                                    reasonController,
-                                                                validator:
-                                                                    (value) {
-                                                                  if (value ==
-                                                                          null ||
-                                                                      value
-                                                                          .isEmpty) {
-                                                                    return 'Please input reason';
-                                                                  }
-                                                                  return null;
-                                                                },
-                                                                decoration: InputDecoration(
-                                                                    label: Text(
-                                                                        'Please input reason*'),
-                                                                    contentPadding: const Pad(
-                                                                        top: 0,
-                                                                        bottom:
-                                                                            0,
-                                                                        left:
-                                                                            10),
-                                                                    border: OutlineInputBorder(
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(
-                                                                                5)),
-                                                                    enabledBorder:
-                                                                        OutlineInputBorder(
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(5))),
-                                                              ),
-                                                            ],
-                                                          )),
-                                                      "Approve", approve: () {
-                                                    if (reasonKey.currentState!
-                                                        .validate()) {
-                                                      showLoaderDialog(context);
-                                                      ref
-                                                          .watch(approveRejectRequestsProvider(
-                                                                  id:
-                                                                      "${data.inAttenData?[index].id}",
-                                                                  notes: reasonController
-                                                                      .text
-                                                                      .toString(),
-                                                                  status: "2",
-                                                                  type:
-                                                                      "in_status")
-                                                              .future)
-                                                          .then((value) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                        Navigator.of(
-                                                                dialogContext)
-                                                            .pop();
-                                                        ref.invalidate(
-                                                            attendanceRequestsInProvider);
-                                                      }).onError((e, s) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                      });
-                                                    }
-                                                  }, reject: () {
-                                                    Navigator.of(context).pop();
-                                                  }));
-                                        }, reject: () {
+                                           showLoaderDialog(context);
+                                           ref
+                                               .watch(approveRejectRequestsProvider(
+                                                       id:
+                                                           "${data.inAttenData?[index].id}",
+                                                       notes: "",
+                                                       status: "2",
+                                                       type: "in_status")
+                                                   .future)
+                                               .then((value) {
+                                             hideLoaderDialog(context);
+                                             Navigator.of(context).pop();
+                                             ref.invalidate(
+                                                 attendanceRequestsInProvider);
+                                           }).onError((e, s) {
+                                             hideLoaderDialog(context);
+                                             Navigator.of(context).pop();
+                                           });
+                                         }, reject: () {
                                           showDialog(
                                               context: context,
                                               builder: (dialogContext) =>

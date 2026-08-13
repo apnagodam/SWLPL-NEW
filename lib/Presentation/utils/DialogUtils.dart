@@ -358,6 +358,7 @@ cctvAlertDialog(BuildContext context, WidgetRef widgetRef, String caseId) {
 }
 
 attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
+  TextEditingController purposeController = TextEditingController();
   return AlertDialog(
     title: Consumer(
         builder: (context, ref, child) => Column(
@@ -376,107 +377,140 @@ attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
             )),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     backgroundColor: Colors.white,
-    content: SizedBox(
-      height: 250,
-      child: InkWell(
-        child: DottedBorder(
-          color: primaryColorDark,
-          borderType: BorderType.RRect,
-          padding: const Pad(all: 10),
-          radius: const Radius.circular(5),
-          child: Center(
-            child: widgetRef.watch(attendanceImageProvider) == null
-                ? ColumnSuper(
-                    children: const [
-                      Icon(
-                        Icons.file_upload_rounded,
-                        color: primaryColorDark,
-                      ),
-                      Text(
-                        'Capture Attendance Image',
-                        style: TextStyle(
-                            color: primaryColorDark,
-                            fontWeight: FontWeight.bold),
-                      )
-                    ],
-                  )
-                : InkWell(
-                    onTap: () async {
-                      try {
-                        pickImage().then((value) async {
-                          if (value != null) {
-                            createStampedImageFile(value, widgetRef)
-                                .then((value) {
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 220,
+            child: InkWell(
+              child: DottedBorder(
+                color: primaryColorDark,
+                borderType: BorderType.RRect,
+                padding: const Pad(all: 10),
+                radius: const Radius.circular(5),
+                child: Center(
+                  child: widgetRef.watch(attendanceImageProvider) == null
+                      ? ColumnSuper(
+                          children: const [
+                            Icon(
+                              Icons.file_upload_rounded,
+                              color: primaryColorDark,
+                            ),
+                            Text(
+                              'Capture Attendance Image',
+                              style: TextStyle(
+                                  color: primaryColorDark,
+                                  fontWeight: FontWeight.bold),
+                            )
+                          ],
+                        )
+                      : InkWell(
+                          onTap: () async {
+                            try {
+                              pickImage().then((value) async {
+                                if (value != null) {
+                                  createStampedImageFile(value, widgetRef)
+                                      .then((value) {
+                                    widgetRef
+                                        .watch(attendanceImageProvider.notifier)
+                                        .state = File(value!);
+                                  });
+                                }
+                              });
+                            } catch (e, s) {
+                              debugPrintStack(
+                                stackTrace: s,
+                              );
+                            }
+                          },
+                          child: ZoomOverlay(
+                            modalBarrierColor: Colors.black12,
+                            minScale: 0.5,
+                            maxScale: 3.0,
+                            animationCurve: Curves.fastOutSlowIn,
+                            animationDuration:
+                                const Duration(milliseconds: 300),
+                            twoTouchOnly: true,
+                            onScaleStart: () {},
+                            onScaleStop: () {},
+                            child: Image.memory(
                               widgetRef
-                                  .watch(attendanceImageProvider.notifier)
-                                  .state = File(value!);
-                            });
-                          }
-                        });
-                      } catch (e, s) {
-                        debugPrintStack(
-                          stackTrace: s,
-                        );
-                      }
-                      // checkLocationPermission(ref);
-                    },
-                    child: ZoomOverlay(
-                      modalBarrierColor: Colors.black12,
-                      // Optional
-                      minScale: 0.5,
-                      // Optional
-                      maxScale: 3.0,
-                      // Optional
-                      animationCurve: Curves.fastOutSlowIn,
-                      // Defaults to fastOutSlowIn which mimics IOS instagram behavior
-                      animationDuration: const Duration(milliseconds: 300),
-                      // Defaults to 100 Milliseconds. Recommended duration is 300 milliseconds for Curves.fastOutSlowIn
-                      twoTouchOnly: true,
-                      // Defaults to false
-                      onScaleStart: () {},
-                      // optional VoidCallback
-                      onScaleStop: () {},
-                      // optional VoidCallback
-                      child: Image.memory(
+                                      .watch(attendanceImageProvider)
+                                      ?.readAsBytesSync() ??
+                                  Uint8List(0),
+                              fit: BoxFit.contain,
+                              height: 220,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              onTap: () async {
+                showLoaderDialog(context);
+                try {
+                  ImagePicker()
+                      .pickImage(
+                          source: ImageSource.camera,
+                          maxWidth: 600,
+                          maxHeight: 800,
+                          imageQuality: 10)
+                      .then((value) async {
+                    hideLoaderDialog(context);
+                    if (value != null) {
+                      createStampedImageFile(value, widgetRef).then((value) {
                         widgetRef
-                                .watch(attendanceImageProvider)
-                                ?.readAsBytesSync() ??
-                            Uint8List(0),
-                        fit: BoxFit.contain,
-                        height: 250,
-                      ),
+                            .watch(attendanceImageProvider.notifier)
+                            .state = File(value!);
+                      });
+                    }
+                  });
+                } catch (e, s) {
+                  hideLoaderDialog(context);
+
+                  debugPrintStack(
+                    stackTrace: s,
+                  );
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          Consumer(
+            builder: (context, ref, child) {
+              final lateCheck = ref.watch(checkForLateProvider).valueOrNull;
+              bool isLate =
+                  (lateCheck?.askReason == 1 || lateCheck?.status == 1);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (isLate) ...[
+                    Text(
+                      lateCheck?.message ??
+                          "You are marking late attendance.",
+                      style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                    ),
+                    const SizedBox(height: 5),
+                  ],
+                  TextField(
+                    controller: purposeController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: isLate
+                          ? "Reason for Late Attendance *"
+                          : "Purpose / Notes (Optional)",
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.all(8),
                     ),
                   ),
+                ],
+              );
+            },
           ),
-        ),
-        onTap: () async {
-          showLoaderDialog(context);
-          try {
-            ImagePicker()
-                .pickImage(
-                    source: ImageSource.camera,
-                    maxWidth: 600,
-                    maxHeight: 800,
-                    imageQuality: 10)
-                .then((value) async {
-              hideLoaderDialog(context);
-              if (value != null) {
-                createStampedImageFile(value, widgetRef).then((value) {
-                  widgetRef.watch(attendanceImageProvider.notifier).state =
-                      File(value!);
-                });
-              }
-            });
-          } catch (e, s) {
-            hideLoaderDialog(context);
-
-            debugPrintStack(
-              stackTrace: s,
-            );
-          }
-          // hideLoaderDialog(context);
-          // checkLocationPermission(ref);
-        },
+        ],
       ),
     ),
     actions: [
@@ -491,34 +525,45 @@ attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
           borderWidth: 1,
           onTap: () async {
             try {
-              if (widgetRef.watch(attendanceImageProvider) != null) {
-                showLoaderDialog(context);
-                await widgetRef
-                    .watch(postAttendanceV2Provider(
-                            userPurpose: "",
-                            clockStatus: '1',
-                            distance:
-                                widgetRef.watch(distanceProvider).toString(),
-                            image: widgetRef.watch(attendanceImageProvider),
-                            lat:
-                                '${widgetRef.watch(locationProvider)?.latitude}',
-                            long:
-                                '${widgetRef.watch(locationProvider)?.longitude}')
-                        .future)
-                    .then((value) {
-                  hideLoaderDialog(context);
-                  if (value['status'].toString() == "1") {
-                    widgetRef.invalidate(attendanceStatusProvider);
-                    widgetRef.invalidate(attendanceImageProvider);
-                    widgetRef.watch(goRouterProvider).pop();
-                  }
-                  Fluttertoast.showToast(msg: '${value['message']}');
-                }).onError((e, s) {
-                  hideLoaderDialog(context);
-                });
-              } else {
+              if (widgetRef.watch(attendanceImageProvider) == null) {
                 Fluttertoast.showToast(msg: "Please Select Image");
+                return;
               }
+
+              final lateCheck =
+                  widgetRef.read(checkForLateProvider).valueOrNull;
+              bool isLate =
+                  (lateCheck?.askReason == 1 || lateCheck?.status == 1);
+              if (isLate && purposeController.text.trim().isEmpty) {
+                Fluttertoast.showToast(
+                    msg: "Please enter late attendance reason");
+                return;
+              }
+
+              showLoaderDialog(context);
+              await widgetRef
+                  .watch(postAttendanceV2Provider(
+                          userPurpose: purposeController.text.trim(),
+                          clockStatus: '1',
+                          distance:
+                              widgetRef.watch(distanceProvider).toString(),
+                          image: widgetRef.watch(attendanceImageProvider),
+                          lat:
+                              '${widgetRef.watch(locationProvider)?.latitude}',
+                          long:
+                              '${widgetRef.watch(locationProvider)?.longitude}')
+                      .future)
+                  .then((value) {
+                hideLoaderDialog(context);
+                if (value['status'].toString() == "1") {
+                  widgetRef.invalidate(attendanceStatusProvider);
+                  widgetRef.invalidate(attendanceImageProvider);
+                  widgetRef.watch(goRouterProvider).pop();
+                }
+                Fluttertoast.showToast(msg: '${value['message']}');
+              }).onError((e, s) {
+                hideLoaderDialog(context);
+              });
             } catch (e, s) {
               hideLoaderDialog(context);
               showErrorDialog(context, e.toString());

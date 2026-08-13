@@ -26,6 +26,7 @@ import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:searchable_listview/widgets/default_loading_widget.dart';
 
 import '../../../Data/Models/CaseIdResponseModel.dart';
+import '../../../Data/Models/CheckForLateResponse.dart';
 
 class Dashboardpanel extends ConsumerWidget {
   const Dashboardpanel({super.key});
@@ -34,10 +35,10 @@ class Dashboardpanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
-        if ((ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
+        if (!(ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
             .toString()
             .toLowerCase()
-            .contains('info'))
+            .contains('guard'))
           Padding(
             padding: const Pad(all: 10),
             child: Text(
@@ -46,17 +47,17 @@ class Dashboardpanel extends ConsumerWidget {
                   fontWeight: FontWeight.bold, fontSize: Adaptive.sp(18)),
             ),
           ),
-        if ((ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
+        if (!(ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
             .toString()
             .toLowerCase()
-            .contains('info'))
+            .contains('guard'))
           ref.watch(attendanceStatusProvider).when(
               data: (attendanceData) => InkWell(
                     child: Card(
                       elevation: 5,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
-                      color: attendanceData.clockStatus.toString() != "1"
+                      color: attendanceData.clockStatus.toString() == "1"
                           ? Colors.red
                           : primaryColor,
                       margin: const Pad(all: 10),
@@ -77,7 +78,7 @@ class Dashboardpanel extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${attendanceData.clockStatus.toString() != "1" ? "Tap to Clock OUT" : "Tap to Clock IN"}',
+                                '${attendanceData.clockStatus.toString() == "1" ? "Tap to Clock OUT" : "Tap to Clock IN"}',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: Adaptive.sp(14),
@@ -107,49 +108,167 @@ class Dashboardpanel extends ConsumerWidget {
                                       captureImage: (mediaCapture) {
                                         if (mediaCapture!.status ==
                                             MediaCaptureStatus.success) {
+                                          Navigator.of(context,
+                                                  rootNavigator: false)
+                                              .pop();
                                           showLoaderDialog(context);
                                           createStampedImageFile(
                                                   XFile(mediaCapture
                                                       .captureRequest.path!),
                                                   ref)
                                               .then((image) async {
-                                            print(image);
-                                            showLoaderDialog(context);
-                                            await ref
-                                                .watch(postAttendanceV2Provider(
-                                                        userPurpose: '',
-                                                        clockStatus: attendanceData
-                                                                    .clockStatus
-                                                                    .toString() ==
-                                                                "1"
-                                                            ? "1"
-                                                            : "2",
-                                                        distance: ref
-                                                            .watch(
-                                                                distanceProvider)
-                                                            .toString(),
-                                                        image: File(image!),
-                                                        lat:
-                                                            '${ref.watch(locationProvider)?.latitude}',
-                                                        long:
-                                                            '${ref.watch(locationProvider)?.longitude}')
-                                                    .future)
-                                                .then((value) {
-                                              hideLoaderDialog(context);
-                                              if (value['status'].toString() ==
-                                                  "1") {
-                                                ref.invalidate(
-                                                    attendanceStatusProvider);
-                                              }
-                                              Fluttertoast.showToast(
-                                                  msg: '${value['message']}');
-                                            }).onError((e, s) {
-                                              hideLoaderDialog(context);
-                                            });
+                                            hideLoaderDialog(context);
+                                            if (image == null) return;
+
+                                            bool isClockIn = attendanceData.clockStatus.toString() != "1";
+                                            CheckForLateResponse? lateCheck;
+                                            try {
+                                              lateCheck = await ref.read(checkForLateProvider.future);
+                                            } catch (_) {}
+                                            bool isLate = lateCheck != null && (lateCheck.askReason == 1 || lateCheck.status == 1);
+                                            TextEditingController reasonCtrl = TextEditingController();
+
+                                            showDialog(
+                                              context: context,
+                                              barrierDismissible: false,
+                                              builder: (dialogCtx) => AlertDialog(
+                                                title: Text(isClockIn
+                                                    ? "Late Checkin Reason"
+                                                    : "Late Checkout Reason"),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(10)),
+                                                content: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    if (isLate) ...[
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets.all(8),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors
+                                                              .amber.shade100,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                  6),
+                                                          border: Border.all(
+                                                              color: Colors.amber
+                                                                  .shade800),
+                                                        ),
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons
+                                                                  .warning_amber_rounded,
+                                                              color: Colors
+                                                                  .amber.shade900,
+                                                            ),
+                                                            const SizedBox(
+                                                                width: 6),
+                                                            Expanded(
+                                                              child: Text(
+                                                                lateCheck
+                                                                        ?.message ??
+                                                                    "You are marking late attendance. Please enter reason below.",
+                                                                style: TextStyle(
+                                                                    color: Colors
+                                                                        .amber
+                                                                        .shade900,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                    fontSize: Adaptive
+                                                                        .sp(13)),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 10),
+                                                    ],
+                                                    TextField(
+                                                      controller: reasonCtrl,
+                                                      maxLines: 3,
+                                                      decoration: InputDecoration(
+                                                        labelText: isLate
+                                                            ? "Reason for Late Attendance *"
+                                                            : "Purpose / Notes",
+                                                        hintText:
+                                                            "Enter reason here...",
+                                                        border:
+                                                            const OutlineInputBorder(),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(dialogCtx),
+                                                    child: const Text("Cancel"),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style: ElevatedButton.styleFrom(
+                                                        backgroundColor:
+                                                            primaryColorDark),
+                                                    onPressed: () async {
+                                                      if (isLate &&
+                                                          reasonCtrl.text
+                                                              .trim()
+                                                              .isEmpty) {
+                                                        Fluttertoast.showToast(
+                                                            msg:
+                                                                "Please enter late attendance reason");
+                                                        return;
+                                                      }
+                                                      Navigator.pop(dialogCtx);
+                                                      showLoaderDialog(context);
+                                                      await ref
+                                                          .watch(postAttendanceV2Provider(
+                                                                  userPurpose:
+                                                                      reasonCtrl
+                                                                          .text
+                                                                          .trim(),
+                                                                  clockStatus:
+                                                                      isClockIn
+                                                                          ? "1"
+                                                                          : "2",
+                                                                  distance: ref
+                                                                      .watch(
+                                                                          distanceProvider)
+                                                                      .toString(),
+                                                                  image:
+                                                                      File(image),
+                                                                  lat:
+                                                                      '${ref.watch(locationProvider)?.latitude}',
+                                                                  long:
+                                                                      '${ref.watch(locationProvider)?.longitude}')
+                                                              .future)
+                                                          .then((value) {
+                                                        hideLoaderDialog(context);
+                                                        if (value['status']
+                                                                .toString() ==
+                                                            "1") {
+                                                          ref.invalidate(
+                                                              attendanceStatusProvider);
+                                                        }
+                                                        Fluttertoast.showToast(
+                                                            msg:
+                                                                '${value['message']}');
+                                                      }).onError((e, s) {
+                                                        hideLoaderDialog(context);
+                                                      });
+                                                    },
+                                                    child: const Text("Submit",
+                                                        style: TextStyle(
+                                                            color: Colors.white)),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
                                           });
-                                          Navigator.of(context,
-                                                  rootNavigator: false)
-                                              .pop();
                                         }
                                       },
                                     )
@@ -158,10 +277,10 @@ class Dashboardpanel extends ConsumerWidget {
                   ),
               error: (e, s) => Container(),
               loading: () => DynamicShimmerList()),
-        if ((ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
+        if (!(ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
             .toString()
             .toLowerCase()
-            .contains('info'))
+            .contains('guard'))
           Row(
             children: [
               Expanded(
@@ -280,10 +399,10 @@ class Dashboardpanel extends ConsumerWidget {
               )
             ],
           ),
-        if ((ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
+        if (!(ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
             .toString()
             .toLowerCase()
-            .contains('info'))
+            .contains('guard'))
           Padding(
             padding: const Pad(all: 10),
             child: Text(
@@ -292,10 +411,10 @@ class Dashboardpanel extends ConsumerWidget {
                   fontWeight: FontWeight.bold, fontSize: Adaptive.sp(18)),
             ),
           ),
-        if ((ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
+        if (!(ref.watch(sharedUtilityProvider).getUser()?.designation ?? "")
             .toString()
             .toLowerCase()
-            .contains('info'))
+            .contains('guard'))
           ref.watch(caseIdProvider).when(
               data: (data) {
                 List<Datum> duplicateList = [];

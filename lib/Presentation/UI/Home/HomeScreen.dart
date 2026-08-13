@@ -287,6 +287,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
   }
 
+  void _navigateWithClockCheck(String routeName, {Object? extra}) {
+    ref.read(attendanceStatusProvider.future).then((value) {
+      if (value.clockStatus.toString() == "1") {
+        if (extra != null) {
+          context.goNamed(routeName, extra: extra);
+        } else {
+          context.goNamed(routeName);
+        }
+      } else {
+        Fluttertoast.showToast(msg: "please checking first to open this page ");
+      }
+    }).onError((e, s) {
+      Fluttertoast.showToast(msg: "please checking first to open this page ");
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -305,7 +321,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           actions: [
             IconButton(
                 onPressed: () {
-                  ref.watch(goRouterProvider).goNamed('attendance');
+                  _navigateWithClockCheck('attendance');
                 },
                 icon: const Icon(Icons.calendar_month)),
           ],
@@ -339,7 +355,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                             "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
                                           ),
                                         ),
-                              onTap: () => context.goNamed('profile'),
+                              onTap: () => _navigateWithClockCheck('profile'),
                             ),
                             ref.watch(profileDataProvider).when(
                                 data: (profileData) => ListTile(
@@ -352,8 +368,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                         Icons.wallet,
                                         color: primaryColor,
                                       ),
-                                      onTap: () => context
-                                          .goNamed('walletStatementScreen'),
+                                      onTap: () => _navigateWithClockCheck(
+                                          'walletStatementScreen'),
                                     ),
                                 error: (e, s) => Container(),
                                 loading: () =>
@@ -377,7 +393,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   leading: Icon(Icons.calendar_month,
                                       color: primaryColorDark),
                                   onTap: () =>
-                                      context.goNamed('listOfHolidays'),
+                                      _navigateWithClockCheck('listOfHolidays'),
                                 ),
                               ],
                             ),
@@ -434,7 +450,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('advance');
+                                    _navigateWithClockCheck('advance');
                                   },
                                 ),
                                 CupertinoListTile(
@@ -448,7 +464,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('advance_history');
+                                    _navigateWithClockCheck('advance_history');
                                   },
                                 ),
                               ],
@@ -490,7 +506,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                             "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
                                           ),
                                         ),
-                              onTap: () => context.goNamed('profile'),
+                              onTap: () => _navigateWithClockCheck('profile'),
                             ),
                             ref.watch(profileDataProvider).when(
                                 data: (profileData) => ListTile(
@@ -503,8 +519,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                         Icons.wallet,
                                         color: primaryColor,
                                       ),
-                                      onTap: () => context
-                                          .goNamed('walletStatementScreen'),
+                                      onTap: () => _navigateWithClockCheck(
+                                          'walletStatementScreen'),
                                     ),
                                 error: (e, s) => Container(),
                                 loading: () =>
@@ -520,7 +536,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 ),
                                 trailing: const CupertinoListTileChevron(),
                                 onTap: () =>
-                                    context.goNamed('quality_calculator')),
+                                    _navigateWithClockCheck('quality_calculator')),
                             ExpansionTile(
                               shape: const Border(
                                   bottom: BorderSide(color: primaryColorDark)),
@@ -540,7 +556,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   leading: Icon(Icons.calendar_month,
                                       color: primaryColorDark),
                                   onTap: () =>
-                                      context.goNamed('listOfHolidays'),
+                                      _navigateWithClockCheck('listOfHolidays'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -550,7 +566,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   leading: Icon(Icons.perm_contact_calendar,
                                       color: primaryColorDark),
                                   onTap: () =>
-                                      context.goNamed('attendanceRequest'),
+                                      _navigateWithClockCheck('attendanceRequest'),
                                 ),
                               ],
                             ),
@@ -579,7 +595,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('spray_cleaning'),
+                                      _navigateWithClockCheck('spray_cleaning'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -591,7 +607,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('cleaning'),
+                                  onTap: () => _navigateWithClockCheck('cleaning'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -603,7 +619,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('chr_cleaning'),
+                                  onTap: () => _navigateWithClockCheck('chr_cleaning'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -616,7 +632,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('fumigation_cleaning'),
+                                      _navigateWithClockCheck('fumigation_cleaning'),
                                 ),
                               ],
                             ),
@@ -644,7 +660,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('whs_in'),
+                                  onTap: () => _navigateWithClockCheck('whs_in'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -656,7 +672,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('whs_out'),
+                                  onTap: () => _navigateWithClockCheck('whs_out'),
                                 ),
                               ],
                             ),
@@ -684,7 +700,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('generate_lead'),
+                                  onTap: () => _navigateWithClockCheck('generate_lead'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -696,7 +712,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('leads_list'),
+                                  onTap: () => _navigateWithClockCheck('leads_list'),
                                 ),
                               ],
                             ),
@@ -724,7 +740,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('start_audit'),
+                                  onTap: () => _navigateWithClockCheck('start_audit'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -736,7 +752,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context.goNamed('active_audit'),
+                                  onTap: () => _navigateWithClockCheck('active_audit'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -749,7 +765,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('completed_audit'),
+                                      _navigateWithClockCheck('completed_audit'),
                                 ),
                               ],
                             ),
@@ -778,7 +794,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('vendor_voucher'),
+                                      _navigateWithClockCheck('vendor_voucher'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -791,7 +807,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('vendor_voucher_approve'),
+                                      _navigateWithClockCheck('vendor_voucher_approve'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -804,7 +820,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('add_vendor_voucher'),
+                                      _navigateWithClockCheck('add_vendor_voucher'),
                                 ),
                               ],
                             ),
@@ -833,7 +849,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('create_voucher'),
+                                      _navigateWithClockCheck('create_voucher'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -846,7 +862,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('voucher_history'),
+                                      _navigateWithClockCheck('voucher_history'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -859,7 +875,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('voucher_request'),
+                                      _navigateWithClockCheck('voucher_request'),
                                 ),
                               ],
                             ),
@@ -874,7 +890,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   width: Adaptive.sp(20),
                                 ),
                                 trailing: const CupertinoListTileChevron(),
-                                onTap: () => context.goNamed('cancel_case_id')),
+                                 onTap: () => _navigateWithClockCheck('cancel_case_id')),
                             ExpansionTile(
                               shape: const Border(
                                   bottom: BorderSide(color: primaryColorDark)),
@@ -900,7 +916,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () =>
-                                      context.goNamed('displeased_bags'),
+                                      _navigateWithClockCheck('displeased_bags'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -912,8 +928,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context
-                                      .goNamed('displeased_request_list'),
+                                  onTap: () => _navigateWithClockCheck(
+                                      'displeased_request_list'),
                                 ),
                                 CupertinoListTile(
                                   title: Text(
@@ -925,8 +941,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     height: Adaptive.sp(20),
                                     width: Adaptive.sp(20),
                                   ),
-                                  onTap: () => context
-                                      .goNamed('displeased_approve_reject'),
+                                  onTap: () => _navigateWithClockCheck(
+                                      'displeased_approve_reject'),
                                 ),
                               ],
                             ),
@@ -955,7 +971,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('truck_book_list',
+                                    _navigateWithClockCheck('truck_book_list',
                                         extra: {'in_out': 'IN'});
                                   },
                                 ),
@@ -971,7 +987,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       width: Adaptive.sp(20),
                                     ),
                                     onTap: () {
-                                      context.goNamed('labour_book_list',
+                                      _navigateWithClockCheck('labour_book_list',
                                           extra: {'in_out': 'IN'});
                                     }),
                                 CupertinoListTile(
@@ -985,7 +1001,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('f_kanta_parchi_list',
+                                    _navigateWithClockCheck('f_kanta_parchi_list',
                                         extra: {'in_out': 'IN'});
                                   },
                                 ),
@@ -1000,7 +1016,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('f_quality_report_list');
+                                    _navigateWithClockCheck('f_quality_report_list');
                                   },
                                 ),
                                 CupertinoListTile(
@@ -1014,7 +1030,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('s_kanta_parchi_list',
+                                    _navigateWithClockCheck('s_kanta_parchi_list',
                                         extra: {'in_out': 'IN'});
                                   },
                                 ),
@@ -1029,7 +1045,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('s_quality_list',
+                                    _navigateWithClockCheck('s_quality_list',
                                         extra: {'in_out': 'IN'});
                                   },
                                 ),
@@ -1060,7 +1076,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('truck_book_list',
+                                    _navigateWithClockCheck('truck_book_list',
                                         extra: {'in_out': 'OUT'});
                                   },
                                 ),
@@ -1075,7 +1091,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       height: Adaptive.sp(20),
                                       width: Adaptive.sp(20),
                                     ),
-                                    onTap: () => context.goNamed(
+                                    onTap: () => _navigateWithClockCheck(
                                         'labour_book_list',
                                         extra: {'in_out': 'OUT'})),
                                 CupertinoListTile(
@@ -1089,7 +1105,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('f_kanta_parchi_list',
+                                    _navigateWithClockCheck('f_kanta_parchi_list',
                                         extra: {'in_out': 'OUT'});
                                   },
                                 ),
@@ -1104,7 +1120,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('s_quality_list',
+                                    _navigateWithClockCheck('s_quality_list',
                                         extra: {'in_out': 'OUT'});
                                   },
                                 ),
@@ -1119,7 +1135,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('s_kanta_parchi_list',
+                                    _navigateWithClockCheck('s_kanta_parchi_list',
                                         extra: {'in_out': 'OUT'});
                                   },
                                 ),
@@ -1150,7 +1166,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('withdraw_requests');
+                                    _navigateWithClockCheck('withdraw_requests');
                                   },
                                 ),
                                 CupertinoListTile(
@@ -1164,7 +1180,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('advance');
+                                    _navigateWithClockCheck('advance');
                                   },
                                 ),
                                 CupertinoListTile(
@@ -1178,7 +1194,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     width: Adaptive.sp(20),
                                   ),
                                   onTap: () {
-                                    context.goNamed('advance_history');
+                                    _navigateWithClockCheck('advance_history');
                                   },
                                 ),
                               ],
@@ -1194,7 +1210,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 width: Adaptive.sp(20),
                               ),
                               onTap: () {
-                                context.goNamed('pv');
+                                _navigateWithClockCheck('pv');
                               },
                             ),
                             ListTile(
@@ -1208,7 +1224,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 width: Adaptive.sp(20),
                               ),
                               onTap: () {
-                                context.goNamed('update');
+                                _navigateWithClockCheck('update');
                               },
                             ),
                             TextButton(

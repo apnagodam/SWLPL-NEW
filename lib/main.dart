@@ -199,11 +199,7 @@ class MyApp extends ConsumerWidget {
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: Adaptive.sp(18))),
-          cardTheme: const CardTheme(
-            surfaceTintColor: Colors.white,
-            elevation: 8,
-            color: Colors.white,
-          ),
+
           scaffoldBackgroundColor: Colors.white),
       title: 'SWLPL',
     );
