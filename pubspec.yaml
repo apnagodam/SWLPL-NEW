@@ -39,7 +39,7 @@ dependencies:
   build_runner: 
   riverpod_annotation: 
   flutter_riverpod: 
-  geolocator: ^11.0.0
+  geolocator: ^13.0.0
   shared_preferences: ^2.2.3
   dio: ^5.4.3+1
   assorted_layout_widgets: ^9.0.1
@@ -92,7 +92,7 @@ dependencies:
   syncfusion_flutter_charts: ^23.2.7
   data_table_2: 2.5.15
   custom_sliding_segmented_control: ^1.8.4
-  elevarm_ui: ^0.11.1
+  elevarm_ui: 0.11.5
   pdf: ^3.11.3
   flutter_pdfview: ^1.4.0
   watermark_unique: ^1.0.8
@@ -101,21 +101,16 @@ dependencies:
   flutter_widget_from_html: ^0.16.0
   upgrader: ^11.3.2
   mobile_device_identifier: ^0.0.3
-  file_picker: 7.1.0
-  
+  file_picker: ^8.1.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
-  flutter_lints: ^2.0.0
 
 dependency_overrides:
+  syncfusion_flutter_charts: ^26.2.14
+  syncfusion_flutter_core: ^26.2.14
+  syncfusion_flutter_datepicker: ^26.2.14
   flutter_keyboard_visibility: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
