@@ -219,6 +219,39 @@ class _AttendancerequestsState extends ConsumerState<Attendancerequests> {
                                               SizedBox(
                                                 height: 10,
                                               ),
+                                              if (data.inAttenData?[index].inRemark != null &&
+                                                  "${data.inAttenData?[index].inRemark}".trim().isNotEmpty) ...[
+                                                Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text('Reason / Remark:',
+                                                          style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                              color: Colors.black,
+                                                              fontSize:
+                                                                  Adaptive.sp(
+                                                                      14))),
+                                                    ),
+                                                    Expanded(
+                                                      child: Text(
+                                                        "${data.inAttenData?[index].inRemark}",
+                                                        textAlign: TextAlign.start,
+                                                        style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.black87,
+                                                            fontSize:
+                                                                Adaptive.sp(14)),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                SizedBox(
+                                                  height: 10,
+                                                ),
+                                              ],
                                               Row(
                                                 children: [
                                                   Expanded(
@@ -542,6 +575,39 @@ class _AttendancerequestsState extends ConsumerState<Attendancerequests> {
                                               SizedBox(
                                                 height: 10,
                                               ),
+                                              if (data.outAttenData?[index].outRemark != null &&
+                                                  "${data.outAttenData?[index].outRemark}".trim().isNotEmpty) ...[
+                                                Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text('Reason / Remark:',
+                                                          style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                              color: Colors.black,
+                                                              fontSize:
+                                                                  Adaptive.sp(
+                                                                      14))),
+                                                    ),
+                                                    Expanded(
+                                                      child: Text(
+                                                        "${data.outAttenData?[index].outRemark}",
+                                                        textAlign: TextAlign.start,
+                                                        style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.black87,
+                                                            fontSize:
+                                                                Adaptive.sp(14)),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                SizedBox(
+                                                  height: 10,
+                                                ),
+                                              ],
                                               Row(
                                                 children: [
                                                   Expanded(
@@ -587,88 +653,25 @@ class _AttendancerequestsState extends ConsumerState<Attendancerequests> {
                                               ),
                                             ]),
                                             "Request Details", approve: () {
-                                          showDialog(
-                                              context: context,
-                                              builder: (dialogContext) =>
-                                                  showConfirmAlertDialog(
-                                                      context,
-                                                      Form(
-                                                          key: reasonKey,
-                                                          child: Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              TextFormField(
-                                                                maxLines: 5,
-                                                                controller:
-                                                                    reasonController,
-                                                                validator:
-                                                                    (value) {
-                                                                  if (value ==
-                                                                          null ||
-                                                                      value
-                                                                          .isEmpty) {
-                                                                    return 'Please input reason';
-                                                                  }
-                                                                  return null;
-                                                                },
-                                                                decoration: InputDecoration(
-                                                                    label: Text(
-                                                                        'Please input reason*'),
-                                                                    contentPadding: const Pad(
-                                                                        top: 0,
-                                                                        bottom:
-                                                                            0,
-                                                                        left:
-                                                                            10),
-                                                                    border: OutlineInputBorder(
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(
-                                                                                5)),
-                                                                    enabledBorder:
-                                                                        OutlineInputBorder(
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(5))),
-                                                              ),
-                                                            ],
-                                                          )),
-                                                      "Approve", approve: () {
-                                                    if (reasonKey.currentState!
-                                                        .validate()) {
-                                                      showLoaderDialog(context);
-                                                      ref
-                                                          .watch(approveRejectRequestsProvider(
-                                                                  id:
-                                                                      "${data.outAttenData?[index].id}",
-                                                                  notes: reasonController
-                                                                      .text
-                                                                      .toString(),
-                                                                  status: "2",
-                                                                  type:
-                                                                      "out_status")
-                                                              .future)
-                                                          .then((value) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                        Navigator.of(
-                                                                dialogContext)
-                                                            .pop();
-                                                        ref.invalidate(
-                                                            attendanceRequestsOutProvider);
-                                                      }).onError((e, s) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                      });
-                                                    }
-                                                  }, reject: () {
-                                                    Navigator.of(context).pop();
-                                                  }));
-                                        }, reject: () {
+                                            showLoaderDialog(context);
+                                            ref
+                                                .watch(approveRejectRequestsProvider(
+                                                        id:
+                                                            "${data.outAttenData?[index].id}",
+                                                        notes: "",
+                                                        status: "2",
+                                                        type: "out_status")
+                                                    .future)
+                                                .then((value) {
+                                              hideLoaderDialog(context);
+                                              Navigator.of(context).pop();
+                                              ref.invalidate(
+                                                  attendanceRequestsOutProvider);
+                                            }).onError((e, s) {
+                                              hideLoaderDialog(context);
+                                              Navigator.of(context).pop();
+                                            });
+                                          }, reject: () {
                                           showDialog(
                                               context: context,
                                               builder: (context) =>

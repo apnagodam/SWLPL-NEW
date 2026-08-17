@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:assorted_layout_widgets/assorted_layout_widgets.dart';
@@ -37,12 +38,18 @@ import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:zoom_pinch_overlay/zoom_pinch_overlay.dart';
 
+import '../../../Data/Models/AttendanceStatusModel.dart';
 import '../../../Data/Models/SecondQualityUploadModel.dart';
 import '../../../Domain/SecondQualityReport/SecondQualityReportService.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 var isUiEnabled = StateProvider((ref) => false);
 var monthGlobalKey = GlobalKey<MonthViewState>();
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) {
+  debugPrint(notificationResponse.toString());
+}
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -57,6 +64,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
 
   ImagePicker imagePicker = ImagePicker();
+  bool _isAttendanceDialogShowing = false;
+  BuildContext? _attendanceDialogContext;
+  final ValueNotifier<bool> _canPopAttendanceDialog = ValueNotifier(false);
+
+  void _checkAttendanceAndShowDialog(dynamic clockStatus) {
+    if (clockStatus == null || clockStatus.toString() != "2") {
+      if (!_isAttendanceDialogShowing && mounted) {
+        _isAttendanceDialogShowing = true;
+        _canPopAttendanceDialog.value = false;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogCtx) {
+            _attendanceDialogContext = dialogCtx;
+            return ValueListenableBuilder<bool>(
+              valueListenable: _canPopAttendanceDialog,
+              builder: (context, canPop, child) {
+                return PopScope(
+                  canPop: canPop,
+                  child: attendanceAlertDialog(
+                    dialogCtx,
+                    ref,
+                    onDismiss: () {
+                      _canPopAttendanceDialog.value = true;
+                      _isAttendanceDialogShowing = false;
+                      if (Navigator.of(dialogCtx, rootNavigator: true).canPop()) {
+                        Navigator.of(dialogCtx, rootNavigator: true).pop();
+                      }
+                      _attendanceDialogContext = null;
+                    },
+                  ),
+                );
+              },
+            );
+          },
+        ).then((_) {
+          _isAttendanceDialogShowing = false;
+          _attendanceDialogContext = null;
+        });
+      }
+    } else {
+      // User is already clocked in (clockStatus == "2")
+      if (_isAttendanceDialogShowing && _attendanceDialogContext != null) {
+        _canPopAttendanceDialog.value = true;
+        _isAttendanceDialogShowing = false;
+        try {
+          if (Navigator.of(_attendanceDialogContext!, rootNavigator: true).canPop()) {
+            Navigator.of(_attendanceDialogContext!, rootNavigator: true).pop();
+          }
+        } catch (_) {}
+        _attendanceDialogContext = null;
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -85,148 +146,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-
-      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-
-      await requestLocationPermission();
-
-      var position = await Geolocator.getCurrentPosition();
-
-      ref.watch(distanceProvider.notifier).state = Geolocator.distanceBetween(
-              ref.watch(locationProvider)?.latitude ?? 0.0,
-              ref.watch(locationProvider)?.longitude ?? 0.0,
-              double.tryParse(
-                      ref.watch(sharedUtilityProvider).getUser()?.attenLat ??
-                          "0.0") ??
-                  0.0,
-              double.tryParse(
-                      ref.watch(sharedUtilityProvider).getUser()?.attenLong ??
-                          "0.0") ??
-                  0.0)
-          .toString();
-      ref.watch(locationProvider.notifier).state = position;
-      placemarkFromCoordinates(position.latitude, position.longitude)
-          .then((placemarks) {
-        ref.watch(addressProvider.notifier).state =
-            "${placemarks.first.name} ${placemarks.first.street} ${placemarks.first.locality} ${placemarks.first.administrativeArea}";
-      }).onError((e, s) {
-        throw new Exception('${e}');
-      });
       ref.read(attendanceStatusProvider.future).then((value) {
-        print("CLOCK STATUS => ${value.clockStatus}");
-
-        if (value.clockStatus.toString() == '0') {
-          showDialog(
-            context: context,
-            barrierDismissible: (ref
-                        .read(sharedUtilityProvider)
-                        .getUser()
-                        ?.empId
-                        .toString()
-                        .toLowerCase() ==
-                    "ag0212") ||
-                ref
-                        .read(sharedUtilityProvider)
-                        .getUser()
-                        ?.empId
-                        .toString()
-                        .toLowerCase() ==
-                    "ag0252",
-            builder: (context) => WillPopScope(
-              onWillPop: () async =>
-                  (ref
-                          .read(sharedUtilityProvider)
-                          .getUser()
-                          ?.empId
-                          .toString()
-                          .toLowerCase() ==
-                      "ag0212") ||
-                  ref
-                          .read(sharedUtilityProvider)
-                          .getUser()
-                          ?.empId
-                          .toString()
-                          .toLowerCase() ==
-                      "ag0252",
-              child: attendanceAlertDialog(context, ref),
-            ),
-          );
-        }
+        debugPrint("CLOCK STATUS => ${value.clockStatus}");
+        _checkAttendanceAndShowDialog(value.clockStatus);
+      }).catchError((e) {
+        debugPrint("Error fetching attendance status: $e");
       });
-      await ref.watch(profileDataProvider.future).then((userData) async {
-        debugPrint(deviceInfo.toString());
 
-        if (ref.watch(dioProvider).options.baseUrl == ApiClient.testBaseUrl) {
-          Dio dio = Dio(BaseOptions(
-              baseUrl: 'http://localhost:3000/api/',
-              connectTimeout: Duration(minutes: 10),
-              sendTimeout: Duration(minutes: 10),
-              receiveTimeout: Duration(minutes: 10)))
-            ..interceptors.addAll([PrettyDioLogger()]);
+      _initLocationAndDevice();
 
-          await dio.post('location/itegrityLocation', data: {
-            "fullName": "${userData.profileData?.firstName}",
-            "phone": "${userData.profileData?.phone ?? "0000000000"}",
-            "loginType": "emp",
-            "deviceId": "${androidInfo.id}",
-            "empId": "${userData.profileData?.empId}",
-            "location": {
-              "type": "Point",
-              "coordinates": [
-                ref.watch(locationProvider)?.longitude ?? 0.0,
-                ref.watch(locationProvider)?.latitude ?? 0.0
-              ]
-            },
-            "appType":
-                "${ref.watch(dioProvider).options.baseUrl == ApiClient.testBaseUrl ? 'test' : 'live'}",
-          });
-          await dio.post('location', data: {
-            "empId": "${userData.profileData?.empId}",
-            "location": {
-              "type": "Point",
-              "coordinates": [
-                ref.watch(locationProvider)?.longitude ?? 0.0,
-                ref.watch(locationProvider)?.latitude ?? 0.0
-              ]
-            },
-          });
-        } else {
-          Dio dio = Dio(BaseOptions(
-              baseUrl: 'https://swlpl-next.vercel.app/api/',
-              connectTimeout: Duration(minutes: 10),
-              sendTimeout: Duration(minutes: 10),
-              receiveTimeout: Duration(minutes: 10)))
-            ..interceptors.addAll([PrettyDioLogger()]);
-
-          await dio.post('location/itegrityLocation', data: {
-            "fullName": "${userData.profileData?.firstName}",
-            "phone": "${userData.profileData?.phone ?? "0000000000"}",
-            "loginType": "emp",
-            "deviceId": "${androidInfo.id}",
-            "empId": "${userData.profileData?.empId}",
-            "location": {
-              "type": "Point",
-              "coordinates": [
-                ref.watch(locationProvider)?.longitude ?? 0.0,
-                ref.watch(locationProvider)?.latitude ?? 0.0
-              ]
-            },
-            "appType":
-                "${ref.watch(dioProvider).options.baseUrl == ApiClient.testBaseUrl ? 'test' : 'live'}",
-          });
-          await dio.post('location', data: {
-            "empId": "${userData.profileData?.empId}",
-            "location": {
-              "type": "Point",
-              "coordinates": [
-                ref.watch(locationProvider)?.longitude ?? 0.0,
-                ref.watch(locationProvider)?.latitude ?? 0.0
-              ]
-            },
-          });
-        }
-      });
       FirebaseMessaging.onMessageOpenedApp.listen((data) {
         if (data.data['type'].toString().toLowerCase() == "attendance") {
           Fluttertoast.showToast(msg: data.data['name'].toString());
@@ -251,10 +179,115 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             iOS: initializationSettingsIOS,
           ), onDidReceiveNotificationResponse: (response) {
         debugPrint(response.toString());
-      }, onDidReceiveBackgroundNotificationResponse: (response) {
-        debugPrint(response.toString());
-      });
+      }, onDidReceiveBackgroundNotificationResponse: notificationTapBackground);
     });
+  }
+
+  void _initLocationAndDevice() async {
+    try {
+      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+      AndroidDeviceInfo? androidInfo;
+      if (Platform.isAndroid) {
+        androidInfo = await deviceInfo.androidInfo;
+      }
+
+      await requestLocationPermission();
+      var position = await Geolocator.getCurrentPosition();
+
+      ref.watch(distanceProvider.notifier).state = Geolocator.distanceBetween(
+              ref.watch(locationProvider)?.latitude ?? 0.0,
+              ref.watch(locationProvider)?.longitude ?? 0.0,
+              double.tryParse(
+                      ref.watch(sharedUtilityProvider).getUser()?.attenLat ??
+                          "0.0") ??
+                  0.0,
+              double.tryParse(
+                      ref.watch(sharedUtilityProvider).getUser()?.attenLong ??
+                          "0.0") ??
+                  0.0)
+          .toString();
+      ref.watch(locationProvider.notifier).state = position;
+      placemarkFromCoordinates(position.latitude, position.longitude)
+          .then((placemarks) {
+        ref.watch(addressProvider.notifier).state =
+            "${placemarks.first.name} ${placemarks.first.street} ${placemarks.first.locality} ${placemarks.first.administrativeArea}";
+      }).catchError((_) {});
+
+      ref.read(profileDataProvider.future).then((userData) async {
+        if (androidInfo == null) return;
+        try {
+          if (ref.watch(dioProvider).options.baseUrl == ApiClient.testBaseUrl) {
+            Dio dio = Dio(BaseOptions(
+                baseUrl: 'http://localhost:3000/api/',
+                connectTimeout: const Duration(minutes: 10),
+                sendTimeout: const Duration(minutes: 10),
+                receiveTimeout: const Duration(minutes: 10)))
+              ..interceptors.addAll([PrettyDioLogger()]);
+
+            await dio.post('location/itegrityLocation', data: {
+              "fullName": "${userData.profileData?.firstName}",
+              "phone": "${userData.profileData?.phone ?? "0000000000"}",
+              "loginType": "emp",
+              "deviceId": "${androidInfo.id}",
+              "empId": "${userData.profileData?.empId}",
+              "location": {
+                "type": "Point",
+                "coordinates": [
+                  ref.watch(locationProvider)?.longitude ?? 0.0,
+                  ref.watch(locationProvider)?.latitude ?? 0.0
+                ]
+              },
+              "appType":
+                  "${ref.watch(dioProvider).options.baseUrl == ApiClient.testBaseUrl ? 'test' : 'live'}",
+            });
+            await dio.post('location', data: {
+              "empId": "${userData.profileData?.empId}",
+              "location": {
+                "type": "Point",
+                "coordinates": [
+                  ref.watch(locationProvider)?.longitude ?? 0.0,
+                  ref.watch(locationProvider)?.latitude ?? 0.0
+                ]
+              },
+            });
+          } else {
+            Dio dio = Dio(BaseOptions(
+                baseUrl: 'https://swlpl-next.vercel.app/api/',
+                connectTimeout: const Duration(minutes: 10),
+                sendTimeout: const Duration(minutes: 10),
+                receiveTimeout: const Duration(minutes: 10)))
+              ..interceptors.addAll([PrettyDioLogger()]);
+
+            await dio.post('location/itegrityLocation', data: {
+              "fullName": "${userData.profileData?.firstName}",
+              "phone": "${userData.profileData?.phone ?? "0000000000"}",
+              "loginType": "emp",
+              "deviceId": "${androidInfo.id}",
+              "empId": "${userData.profileData?.empId}",
+              "location": {
+                "type": "Point",
+                "coordinates": [
+                  ref.watch(locationProvider)?.longitude ?? 0.0,
+                  ref.watch(locationProvider)?.latitude ?? 0.0
+                ]
+              },
+              "appType":
+                  "${ref.watch(dioProvider).options.baseUrl == ApiClient.testBaseUrl ? 'test' : 'live'}",
+            });
+            await dio.post('location', data: {
+              "empId": "${userData.profileData?.empId}",
+              "location": {
+                "type": "Point",
+                "coordinates": [
+                  ref.watch(locationProvider)?.longitude ?? 0.0,
+                  ref.watch(locationProvider)?.latitude ?? 0.0
+                ]
+              },
+            });
+          }
+        } catch (_) {}
+      }).catchError((_) {});
+    } catch (_) {}
   }
 
   int getExtendedVersionNumber(String version) {
@@ -289,7 +322,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   void _navigateWithClockCheck(String routeName, {Object? extra}) {
     ref.read(attendanceStatusProvider.future).then((value) {
-      if (value.clockStatus.toString() == "1") {
+      if (value.clockStatus.toString() == "2") {
         if (extra != null) {
           context.goNamed(routeName, extra: extra);
         } else {
@@ -305,6 +338,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<AttendanceStatusModel>>(
+      attendanceStatusProvider,
+      (previous, next) {
+        next.whenData((status) {
+          _checkAttendanceAndShowDialog(status.clockStatus);
+        });
+      },
+    );
+
     return RefreshIndicator(
         child: androidLayout(context, ref),
         onRefresh: () {
@@ -319,6 +361,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         appBar: AppBar(
           title: const Text("Staff Dashboard"),
           actions: [
+            IconButton(
+              tooltip: "Voice Question",
+              onPressed: () {
+                _navigateWithClockCheck('voice_question');
+              },
+              icon: const Icon(Icons.mic_rounded),
+            ),
             IconButton(
                 onPressed: () {
                   _navigateWithClockCheck('attendance');
@@ -374,6 +423,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 error: (e, s) => Container(),
                                 loading: () =>
                                     CircularProgressIndicator.adaptive()),
+                            CupertinoListTile(
+                              title: Text(
+                                'Questions & Answers',
+                                style: TextStyle(fontSize: Adaptive.sp(16)),
+                              ),
+                              leading: Icon(
+                                Icons.question_answer_rounded,
+                                color: primaryColor,
+                              ),
+                              onTap: () =>
+
+                                  _navigateWithClockCheck('employee_questions'),
+                            ),
                             ExpansionTile(
                               shape: const Border(
                                   bottom: BorderSide(color: primaryColorDark)),
@@ -387,7 +449,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               children: [
                                 CupertinoListTile(
                                   title: Text(
-                                    'List Of Holidays',
+                                              'List Of Holidays',
                                     style: TextStyle(fontSize: Adaptive.sp(16)),
                                   ),
                                   leading: Icon(Icons.calendar_month,
@@ -537,6 +599,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 trailing: const CupertinoListTileChevron(),
                                 onTap: () =>
                                     _navigateWithClockCheck('quality_calculator')),
+                            ListTile(
+                                title: Text(
+                                  'Questions & Answers',
+                                  style: TextStyle(fontSize: Adaptive.sp(16)),
+                                ),
+                                leading: const Icon(
+                                  Icons.question_answer_rounded,
+                                  color: primaryColor,
+                                ),
+                                trailing: const CupertinoListTileChevron(),
+                                onTap: () =>
+                                    _navigateWithClockCheck('employee_questions')),
                             ExpansionTile(
                               shape: const Border(
                                   bottom: BorderSide(color: primaryColorDark)),

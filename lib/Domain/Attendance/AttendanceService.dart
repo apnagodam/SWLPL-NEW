@@ -119,3 +119,146 @@ Future<CheckForLateResponse> checkForLate(CheckForLateRef ref) async {
   var response = await ref.watch(dioProvider).get(ApiClient.lateReason);
   return checkForLateResponseFromMap(jsonEncode(response.data));
 }
+
+class ShiftAttendanceStatus {
+  final bool requiresReason;
+  final bool isCheckIn;
+  final bool isEarly;
+  final bool isLate;
+  final String label;
+
+  ShiftAttendanceStatus({
+    required this.requiresReason,
+    required this.isCheckIn,
+    required this.isEarly,
+    required this.isLate,
+    required this.label,
+  });
+}
+
+ShiftAttendanceStatus getShiftAttendanceStatus(dynamic shiftTimeString, {bool isCheckIn = true}) {
+  if (shiftTimeString == null || shiftTimeString.toString().trim().isEmpty) {
+    return ShiftAttendanceStatus(
+      requiresReason: false,
+      isCheckIn: isCheckIn,
+      isEarly: false,
+      isLate: false,
+      label: "",
+    );
+  }
+
+  try {
+    String raw = shiftTimeString.toString().trim();
+    final now = DateTime.now();
+
+    DateTime? shiftDateTime;
+
+    if (raw.contains('-') && raw.contains(':')) {
+      final parsedDate = DateTime.tryParse(raw);
+      if (parsedDate != null) {
+        shiftDateTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          parsedDate.hour,
+          parsedDate.minute,
+          parsedDate.second,
+        );
+      }
+    }
+
+    if (shiftDateTime == null) {
+      String timeStr = raw.toUpperCase();
+      int hour = 0;
+      int minute = 0;
+      int second = 0;
+
+      bool hasPM = timeStr.contains('PM');
+      bool hasAM = timeStr.contains('AM');
+
+      String cleaned = timeStr.replaceAll('AM', '').replaceAll('PM', '').trim();
+      List<String> parts = cleaned.split(':');
+
+      if (parts.isNotEmpty) {
+        hour = int.parse(parts[0].trim());
+      }
+      if (parts.length > 1) {
+        minute = int.parse(parts[1].trim());
+      }
+      if (parts.length > 2) {
+        second = int.tryParse(parts[2].trim()) ?? 0;
+      }
+
+      if (hasPM && hour < 12) {
+        hour += 12;
+      } else if (hasAM && hour == 12) {
+        hour = 0;
+      }
+
+      shiftDateTime = DateTime(now.year, now.month, now.day, hour, minute, second);
+    }
+
+    if (isCheckIn) {
+      // Check-in (Clock In):
+      // If now is after shift_start -> Late Check-in (Reason required)
+      if (now.isAfter(shiftDateTime)) {
+        return ShiftAttendanceStatus(
+          requiresReason: true,
+          isCheckIn: true,
+          isEarly: false,
+          isLate: true,
+          label: "Shift Start: $raw (Late Check-in)",
+        );
+      }
+      return ShiftAttendanceStatus(
+        requiresReason: false,
+        isCheckIn: true,
+        isEarly: false,
+        isLate: false,
+        label: "On Time",
+      );
+    } else {
+      // Check-out (Clock Out):
+      // If now is before shift_end -> Early Checkout (Reason required)
+      if (now.isBefore(shiftDateTime)) {
+        return ShiftAttendanceStatus(
+          requiresReason: true,
+          isCheckIn: false,
+          isEarly: true,
+          isLate: false,
+          label: "Shift End: $raw (Early Checkout)",
+        );
+      }
+      // If now is after shift_end (over 15 min buffer) -> Late Checkout (Reason required)
+      if (now.isAfter(shiftDateTime.add(const Duration(minutes: 15)))) {
+        return ShiftAttendanceStatus(
+          requiresReason: true,
+          isCheckIn: false,
+          isEarly: false,
+          isLate: true,
+          label: "Shift End: $raw (Late Checkout)",
+        );
+      }
+      return ShiftAttendanceStatus(
+        requiresReason: false,
+        isCheckIn: false,
+        isEarly: false,
+        isLate: false,
+        label: "On Time",
+      );
+    }
+  } catch (e) {
+    return ShiftAttendanceStatus(
+      requiresReason: false,
+      isCheckIn: isCheckIn,
+      isEarly: false,
+      isLate: false,
+      label: "",
+    );
+  }
+}
+
+/// Checks whether the current time requires a reason (late check-in or early/late check-out)
+bool isAttendanceTimeLate(dynamic shiftTimeString, {bool isCheckIn = true}) {
+  return getShiftAttendanceStatus(shiftTimeString, isCheckIn: isCheckIn).requiresReason;
+}

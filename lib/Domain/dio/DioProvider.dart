@@ -11,7 +11,7 @@ part 'DioProvider.g.dart';
 @riverpod
 Dio dio(DioRef ref) {
   return Dio(BaseOptions(
-      baseUrl: ApiClient.testBaseUrl,
+      baseUrl: ApiClient.baseUrl,
       headers: {
         "Authorization": ref.watch(sharedUtilityProvider).getToken(),
       },
@@ -219,6 +219,8 @@ login apis
   static const getAttendenceOutRequests = 'emp_api/out_atten_approval_list';
   static const approveRejectRequest = 'emp_api/approve_emp_atten';
   static const getListOfHolidays = "emp_api/get_ag_holidays";
+  static const submitEmployeeQuestion = "api/employee/questions";
+  static const submitEmployeeQuestionAnswer = "api/employee/questions/answer";
 
   /*
   * conveyance  apis

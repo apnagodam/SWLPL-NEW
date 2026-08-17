@@ -42,6 +42,7 @@ class InAttenDatum {
   dynamic distance;
   dynamic location;
   dynamic image;
+  dynamic inRemark;
 
   InAttenDatum({
     this.id,
@@ -53,6 +54,7 @@ class InAttenDatum {
     this.distance,
     this.location,
     this.image,
+    this.inRemark,
   });
 
   factory InAttenDatum.fromJson(Map<String, dynamic> json) => InAttenDatum(
@@ -65,6 +67,7 @@ class InAttenDatum {
     distance: json["distance"],
     location: json["location"],
     image: json["image"],
+    inRemark: json["in_remark"] ?? json["inRemark"] ?? json["user_purpose"] ?? json["remark"],
   );
 
   Map<String, dynamic> toJson() => {
@@ -77,5 +80,6 @@ class InAttenDatum {
     "distance": distance,
     "location": location,
     "image": image,
+    "in_remark": inRemark,
   };
 }

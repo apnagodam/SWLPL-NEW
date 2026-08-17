@@ -29,6 +29,32 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
+subprojects { project ->
+    if (project.name != 'app') {
+        project.afterEvaluate {
+            if (project.hasProperty('android') && project.android.namespace == null) {
+                def manifestFile = project.file("src/main/AndroidManifest.xml")
+                if (manifestFile.exists()) {
+                    try {
+                        def manifestText = manifestFile.getText('UTF-8')
+                        def pattern = ~/package=["']([^"']+)["']/
+                        def matcher = pattern.matcher(manifestText)
+                        if (matcher.find()) {
+                            project.android.namespace = matcher.group(1)
+                        } else {
+                            project.android.namespace = project.group ?: "com.example.${project.name.replaceAll('-', '_')}"
+                        }
+                    } catch (Exception ignored) {
+                        project.android.namespace = project.group ?: "com.example.${project.name.replaceAll('-', '_')}"
+                    }
+                } else {
+                    project.android.namespace = project.group ?: "com.example.${project.name.replaceAll('-', '_')}"
+                }
+            }
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

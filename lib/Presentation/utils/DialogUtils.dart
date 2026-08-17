@@ -16,7 +16,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:zoom_pinch_overlay/zoom_pinch_overlay.dart';
 
+import '../../Data/SharedPrefs/SharedUtility.dart';
 import '../../Domain/Attendance/AttendanceService.dart';
+import '../../Domain/Authentication/AuthenticationService.dart';
 import '../../main.dart';
 import '../Constants/ColorConstant.dart';
 import '../UI/TruckBook/CreateTruckBook.dart';
@@ -357,92 +359,195 @@ cctvAlertDialog(BuildContext context, WidgetRef widgetRef, String caseId) {
   );
 }
 
-attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
+attendanceAlertDialog(BuildContext context, WidgetRef widgetRef, {VoidCallback? onDismiss}) {
   TextEditingController purposeController = TextEditingController();
   return AlertDialog(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    backgroundColor: Colors.white,
+    surfaceTintColor: Colors.white,
+    titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+    actionsPadding: const EdgeInsets.fromLTRB(20, 15, 20, 20),
     title: Consumer(
-        builder: (context, ref, child) => Column(
+      builder: (context, ref, child) => Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: primaryColorDark.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.fingerprint_rounded,
+              color: primaryColorDark,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Please mark your attendance",
+                  "Mark Attendance",
                   style: TextStyle(
-                      fontSize: Adaptive.sp(18), fontWeight: FontWeight.bold),
+                    fontSize: Adaptive.sp(14),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
-                Divider(
-                  endIndent: 150,
-                  thickness: 4,
-                )
+                const SizedBox(height: 2),
+                Text(
+                  "Capture photo to Clock In",
+                  style: TextStyle(
+                    fontSize: Adaptive.sp(11),
+                    color: Colors.grey.shade600,
+                  ),
+                ),
               ],
-            )),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    backgroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 2),
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () async {
+              if (onDismiss != null) {
+                onDismiss();
+              } else if (Navigator.of(context, rootNavigator: true).canPop()) {
+                Navigator.of(context, rootNavigator: true).pop();
+              }
+              await widgetRef
+                  .read(sharedUtilityProvider)
+                  .sharedPreferences
+                  .clear();
+              widgetRef.invalidate(attendanceStatusProvider);
+              widgetRef.invalidate(attendanceImageProvider);
+              widgetRef.read(goRouterProvider).go('/login');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.logout_rounded, size: 16, color: Colors.red.shade700),
+                  const SizedBox(width: 4),
+                  Text(
+                    "Logout",
+                    style: TextStyle(
+                      fontSize: Adaptive.sp(11),
+                      fontWeight: FontWeight.w600,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
     content: SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const SizedBox(height: 10),
           SizedBox(
-            height: 220,
+            height: 200,
+            width: double.infinity,
             child: InkWell(
+              borderRadius: BorderRadius.circular(12),
               child: DottedBorder(
-                color: primaryColorDark,
+                color: primaryColorDark.withOpacity(0.6),
                 borderType: BorderType.RRect,
-                padding: const Pad(all: 10),
-                radius: const Radius.circular(5),
-                child: Center(
+                dashPattern: const [6, 4],
+                padding: const Pad(all: 6),
+                radius: const Radius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: primaryColorDark.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: widgetRef.watch(attendanceImageProvider) == null
-                      ? ColumnSuper(
-                          children: const [
-                            Icon(
-                              Icons.file_upload_rounded,
-                              color: primaryColorDark,
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: primaryColorDark.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                color: primaryColorDark,
+                                size: 30,
+                              ),
                             ),
-                            Text(
+                            const SizedBox(height: 10),
+                            const Text(
                               'Capture Attendance Image',
                               style: TextStyle(
-                                  color: primaryColorDark,
-                                  fontWeight: FontWeight.bold),
-                            )
+                                color: primaryColorDark,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tap here to take photo',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 11,
+                              ),
+                            ),
                           ],
                         )
-                      : InkWell(
-                          onTap: () async {
-                            try {
-                              pickImage().then((value) async {
-                                if (value != null) {
-                                  createStampedImageFile(value, widgetRef)
-                                      .then((value) {
-                                    widgetRef
-                                        .watch(attendanceImageProvider.notifier)
-                                        .state = File(value!);
-                                  });
-                                }
-                              });
-                            } catch (e, s) {
-                              debugPrintStack(
-                                stackTrace: s,
-                              );
-                            }
-                          },
-                          child: ZoomOverlay(
-                            modalBarrierColor: Colors.black12,
-                            minScale: 0.5,
-                            maxScale: 3.0,
-                            animationCurve: Curves.fastOutSlowIn,
-                            animationDuration:
-                                const Duration(milliseconds: 300),
-                            twoTouchOnly: true,
-                            onScaleStart: () {},
-                            onScaleStop: () {},
-                            child: Image.memory(
-                              widgetRef
-                                      .watch(attendanceImageProvider)
-                                      ?.readAsBytesSync() ??
-                                  Uint8List(0),
-                              fit: BoxFit.contain,
-                              height: 220,
+                      : Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.memory(
+                                widgetRef
+                                        .watch(attendanceImageProvider)
+                                        ?.readAsBytesSync() ??
+                                    Uint8List(0),
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                          ),
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.refresh_rounded,
+                                        size: 14, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "Retake",
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                 ),
               ),
@@ -459,51 +564,82 @@ attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
                     hideLoaderDialog(context);
                     if (value != null) {
                       createStampedImageFile(value, widgetRef).then((value) {
-                        widgetRef
-                            .watch(attendanceImageProvider.notifier)
-                            .state = File(value!);
+                        if (value != null) {
+                          widgetRef
+                              .watch(attendanceImageProvider.notifier)
+                              .state = File(value);
+                        }
                       });
                     }
                   });
                 } catch (e, s) {
                   hideLoaderDialog(context);
-
-                  debugPrintStack(
-                    stackTrace: s,
-                  );
+                  debugPrintStack(stackTrace: s);
                 }
               },
             ),
           ),
-          const SizedBox(height: 10),
           Consumer(
             builder: (context, ref, child) {
-              final lateCheck = ref.watch(checkForLateProvider).valueOrNull;
-              bool isLate =
-                  (lateCheck?.askReason == 1 || lateCheck?.status == 1);
+              final profile = ref.watch(profileDataProvider).valueOrNull?.profileData;
+              final shiftStart = profile?.shiftStart;
+              final bool isLate = isAttendanceTimeLate(shiftStart, isCheckIn: true);
+
+              if (!isLate) {
+                return const SizedBox.shrink();
+              }
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (isLate) ...[
-                    Text(
-                      lateCheck?.message ??
-                          "You are marking late attendance.",
-                      style: const TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade300),
                     ),
-                    const SizedBox(height: 5),
-                  ],
+                    child: Row(
+                      children: [
+                        Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.amber.shade800),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            "Shift Start: ${shiftStart ?? 'Scheduled'} (Late Check-in)",
+                            style: TextStyle(
+                              fontSize: Adaptive.sp(11),
+                              color: Colors.amber.shade900,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   TextField(
                     controller: purposeController,
                     maxLines: 2,
                     decoration: InputDecoration(
-                      labelText: isLate
-                          ? "Reason for Late Attendance *"
-                          : "Purpose / Notes (Optional)",
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.all(8),
+                      prefixIcon: const Icon(Icons.edit_note_rounded, color: primaryColorDark),
+                      labelText: "Reason for Late Attendance *",
+                      hintText: "Enter reason...",
+                      labelStyle: const TextStyle(fontSize: 13),
+                      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: primaryColorDark, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                   ),
                 ],
@@ -514,26 +650,28 @@ attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
       ),
     ),
     actions: [
-      Padding(
-        padding: const Pad(all: 10),
-        child: AnimatedButton(
-          height: 50,
-          color: primaryColorDark,
-          isOutline: true,
-          isMultiColor: true,
-          colors: [primaryColorDark, primaryColorDark],
-          borderWidth: 1,
-          onTap: () async {
+      SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryColorDark,
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: () async {
             try {
               if (widgetRef.watch(attendanceImageProvider) == null) {
                 Fluttertoast.showToast(msg: "Please Select Image");
                 return;
               }
 
-              final lateCheck =
-                  widgetRef.read(checkForLateProvider).valueOrNull;
-              bool isLate =
-                  (lateCheck?.askReason == 1 || lateCheck?.status == 1);
+              final profile = widgetRef.read(profileDataProvider).valueOrNull?.profileData;
+              final shiftStart = profile?.shiftStart;
+              final bool isLate = isAttendanceTimeLate(shiftStart, isCheckIn: true);
+
               if (isLate && purposeController.text.trim().isEmpty) {
                 Fluttertoast.showToast(
                     msg: "Please enter late attendance reason");
@@ -541,24 +679,35 @@ attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
               }
 
               showLoaderDialog(context);
+
+              // 1. Hit late reason API
+              try {
+                await widgetRef.read(checkForLateProvider.future);
+              } catch (_) {}
+
+              // 2. Hit attendance API
               await widgetRef
-                  .watch(postAttendanceV2Provider(
+                  .read(postAttendanceV2Provider(
                           userPurpose: purposeController.text.trim(),
                           clockStatus: '1',
                           distance:
-                              widgetRef.watch(distanceProvider).toString(),
-                          image: widgetRef.watch(attendanceImageProvider),
+                              widgetRef.read(distanceProvider).toString(),
+                          image: widgetRef.read(attendanceImageProvider),
                           lat:
-                              '${widgetRef.watch(locationProvider)?.latitude}',
+                              '${widgetRef.read(locationProvider)?.latitude}',
                           long:
-                              '${widgetRef.watch(locationProvider)?.longitude}')
+                              '${widgetRef.read(locationProvider)?.longitude}')
                       .future)
                   .then((value) {
                 hideLoaderDialog(context);
                 if (value['status'].toString() == "1") {
                   widgetRef.invalidate(attendanceStatusProvider);
                   widgetRef.invalidate(attendanceImageProvider);
-                  widgetRef.watch(goRouterProvider).pop();
+                  if (onDismiss != null) {
+                    onDismiss();
+                  } else {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
                 }
                 Fluttertoast.showToast(msg: '${value['message']}');
               }).onError((e, s) {
@@ -569,13 +718,14 @@ attendanceAlertDialog(BuildContext context, WidgetRef widgetRef) {
               showErrorDialog(context, e.toString());
             }
           },
-          child: Text(
+          icon: const Icon(Icons.login_rounded, color: Colors.white, size: 20),
+          label: const Text(
             'Clock In',
-            textAlign: TextAlign.center,
             style: TextStyle(
-                color: Colors.white,
-                fontSize: Adaptive.sp(14),
-                fontWeight: FontWeight.w800),
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),

@@ -42,6 +42,7 @@ class OutAttenDatum {
   dynamic distance;
   dynamic location;
   dynamic image;
+  dynamic outRemark;
 
   OutAttenDatum({
     this.id,
@@ -53,6 +54,7 @@ class OutAttenDatum {
     this.distance,
     this.location,
     this.image,
+    this.outRemark,
   });
 
   factory OutAttenDatum.fromJson(Map<String, dynamic> json) => OutAttenDatum(
@@ -65,6 +67,7 @@ class OutAttenDatum {
     distance: json["distance"],
     location: json["location"],
     image: json["image"],
+    outRemark: json["out_remark"] ?? json["outRemark"] ?? json["user_purpose"] ?? json["remark"],
   );
 
   Map<String, dynamic> toJson() => {
@@ -77,5 +80,6 @@ class OutAttenDatum {
     "distance": distance,
     "location": location,
     "image": image,
+    "out_remark": outRemark,
   };
 }

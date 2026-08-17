@@ -74,6 +74,8 @@ import 'package:emp_apnagodam/Presentation/UI/TruckBook/TruckBookList.dart';
 import 'package:emp_apnagodam/Presentation/UI/VendorVoucher/AddVoucherScreen.dart';
 import 'package:emp_apnagodam/Presentation/UI/VendorVoucher/VenderVoucherApprover.dart';
 import 'package:emp_apnagodam/Presentation/UI/VendorVoucher/VendorVoucher.dart';
+import 'package:emp_apnagodam/Presentation/UI/VoiceQuestion/VoiceQuestionScreen.dart';
+import 'package:emp_apnagodam/Presentation/UI/Questions/EmployeeQuestionsScreen.dart';
 import 'package:emp_apnagodam/Presentation/UI/Voucher/VoucherList.dart';
 import 'package:emp_apnagodam/Presentation/UI/Advances/WithdrawRequestsScreen.dart';
 import 'package:emp_apnagodam/Presentation/UI/WhsScreens/WhsIn.dart';
@@ -229,11 +231,14 @@ var goRouterProvider = StateProvider((ref) => GoRouter(
       initialLocation: '/',
       debugLogDiagnostics: kDebugMode,
       redirect: (context, state) {
-        if (ref.watch(sharedUtilityProvider).getToken().isEmpty) {
-          if (state.fullPath == '/') {
-            return '/login';
-          }
-          return null;
+        final token = ref.watch(sharedUtilityProvider).getToken();
+        final isLoggingIn = state.matchedLocation == '/login' ||
+            state.matchedLocation == '/login/otp';
+
+        if (token.isEmpty) {
+          return isLoggingIn ? null : '/login';
+        } else {
+          return isLoggingIn ? '/' : null;
         }
       },
       routes: [
@@ -241,6 +246,16 @@ var goRouterProvider = StateProvider((ref) => GoRouter(
             path: "/",
             builder: (context, state) => DashboardScreen(),
             routes: [
+              GoRoute(
+                name: 'voice_question',
+                path: "voice_question",
+                builder: (context, state) => const VoiceQuestionScreen(),
+              ),
+              GoRoute(
+                name: 'employee_questions',
+                path: "employee_questions",
+                builder: (context, state) => const EmployeeQuestionsScreen(),
+              ),
               GoRoute(
                 name: 'listOfHolidays',
                 path: "listOfHolidays",

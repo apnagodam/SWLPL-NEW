@@ -5,6 +5,7 @@ import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:elevarm_ui/elevarm_ui.dart';
 import 'package:emp_apnagodam/Data/SharedPrefs/SharedUtility.dart';
 import 'package:emp_apnagodam/Domain/Attendance/AttendanceService.dart';
+import 'package:emp_apnagodam/Domain/Authentication/AuthenticationService.dart';
 import 'package:emp_apnagodam/Domain/CaseId/CaseIdService.dart';
 import 'package:emp_apnagodam/Domain/dio/DioProvider.dart';
 import 'package:emp_apnagodam/Presentation/Constants/ColorConstant.dart';
@@ -57,7 +58,7 @@ class Dashboardpanel extends ConsumerWidget {
                       elevation: 5,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
-                      color: attendanceData.clockStatus.toString() == "1"
+                      color: attendanceData.clockStatus.toString() == "2"
                           ? Colors.red
                           : primaryColor,
                       margin: const Pad(all: 10),
@@ -78,7 +79,7 @@ class Dashboardpanel extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${attendanceData.clockStatus.toString() == "1" ? "Tap to Clock OUT" : "Tap to Clock IN"}',
+                                '${attendanceData.clockStatus.toString() == "2" ? "Tap to Clock OUT" : "Tap to Clock IN"}',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: Adaptive.sp(14),
@@ -120,154 +121,131 @@ class Dashboardpanel extends ConsumerWidget {
                                             hideLoaderDialog(context);
                                             if (image == null) return;
 
-                                            bool isClockIn = attendanceData.clockStatus.toString() != "1";
-                                            CheckForLateResponse? lateCheck;
-                                            try {
-                                              lateCheck = await ref.read(checkForLateProvider.future);
-                                            } catch (_) {}
-                                            bool isLate = lateCheck != null && (lateCheck.askReason == 1 || lateCheck.status == 1);
-                                            TextEditingController reasonCtrl = TextEditingController();
+                                            bool isClockIn = attendanceData.clockStatus.toString() != "2";
+                                            final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
+                                            final shiftTime = isClockIn ? profileData?.shiftStart : profileData?.shiftEnd;
+                                            final shiftStatus = getShiftAttendanceStatus(shiftTime, isCheckIn: isClockIn);
 
-                                            showDialog(
-                                              context: context,
-                                              barrierDismissible: false,
-                                              builder: (dialogCtx) => AlertDialog(
-                                                title: Text(isClockIn
-                                                    ? "Late Checkin Reason"
-                                                    : "Late Checkout Reason"),
-                                                shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(10)),
-                                                content: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    if (isLate) ...[
+                                            Future<void> doSubmitAttendance(String purpose) async {
+                                              showLoaderDialog(context);
+                                              try {
+                                                // 1. Hit late reason API
+                                                try {
+                                                  await ref.read(checkForLateProvider.future);
+                                                } catch (_) {}
+
+                                                // 2. Hit attendance API
+                                                var value = await ref.read(postAttendanceV2Provider(
+                                                        userPurpose: purpose,
+                                                        clockStatus: isClockIn ? "1" : "2",
+                                                        distance: ref.read(distanceProvider).toString(),
+                                                        image: File(image),
+                                                        lat: '${ref.read(locationProvider)?.latitude}',
+                                                        long: '${ref.read(locationProvider)?.longitude}')
+                                                    .future);
+
+                                                hideLoaderDialog(context);
+                                                if (value['status'].toString() == "1") {
+                                                  ref.invalidate(attendanceStatusProvider);
+                                                }
+                                                Fluttertoast.showToast(msg: '${value['message']}');
+                                              } catch (e) {
+                                                hideLoaderDialog(context);
+                                              }
+                                            }
+
+                                            if (!shiftStatus.requiresReason) {
+                                              await doSubmitAttendance("");
+                                            } else {
+                                              TextEditingController reasonCtrl = TextEditingController();
+
+                                              showDialog(
+                                                context: context,
+                                                barrierDismissible: false,
+                                                builder: (dialogCtx) => AlertDialog(
+                                                  title: Text(isClockIn
+                                                      ? "Late Checkin Reason"
+                                                      : (shiftStatus.isEarly ? "Early Checkout Reason" : "Late Checkout Reason")),
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(10)),
+                                                  content: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
+                                                    children: [
                                                       Container(
-                                                        padding:
-                                                            const EdgeInsets.all(8),
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                        margin: const EdgeInsets.only(bottom: 8),
                                                         decoration: BoxDecoration(
-                                                          color: Colors
-                                                              .amber.shade100,
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                  6),
-                                                          border: Border.all(
-                                                              color: Colors.amber
-                                                                  .shade800),
+                                                          color: Colors.amber.shade50,
+                                                          borderRadius: BorderRadius.circular(8),
+                                                          border: Border.all(color: Colors.amber.shade300),
                                                         ),
                                                         child: Row(
                                                           children: [
-                                                            Icon(
-                                                              Icons
-                                                                  .warning_amber_rounded,
-                                                              color: Colors
-                                                                  .amber.shade900,
-                                                            ),
-                                                            const SizedBox(
-                                                                width: 6),
+                                                            Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.amber.shade800),
+                                                            const SizedBox(width: 6),
                                                             Expanded(
                                                               child: Text(
-                                                                lateCheck
-                                                                        ?.message ??
-                                                                    "You are marking late attendance. Please enter reason below.",
+                                                                shiftStatus.label,
                                                                 style: TextStyle(
-                                                                    color: Colors
-                                                                        .amber
-                                                                        .shade900,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                    fontSize: Adaptive
-                                                                        .sp(13)),
+                                                                  fontSize: Adaptive.sp(11),
+                                                                  color: Colors.amber.shade900,
+                                                                  fontWeight: FontWeight.w600,
+                                                                ),
                                                               ),
                                                             ),
                                                           ],
                                                         ),
                                                       ),
-                                                      const SizedBox(height: 10),
-                                                    ],
-                                                    TextField(
-                                                      controller: reasonCtrl,
-                                                      maxLines: 3,
-                                                      decoration: InputDecoration(
-                                                        labelText: isLate
-                                                            ? "Reason for Late Attendance *"
-                                                            : "Purpose / Notes",
-                                                        hintText:
-                                                            "Enter reason here...",
-                                                        border:
-                                                            const OutlineInputBorder(),
+                                                      TextField(
+                                                        controller: reasonCtrl,
+                                                        maxLines: 3,
+                                                        decoration: InputDecoration(
+                                                          labelText: isClockIn
+                                                              ? "Reason for Late Attendance *"
+                                                              : (shiftStatus.isEarly
+                                                                  ? "Reason for Early Checkout *"
+                                                                  : "Reason for Late Checkout *"),
+                                                          hintText:
+                                                              "Enter reason here...",
+                                                          border:
+                                                              const OutlineInputBorder(),
+                                                        ),
                                                       ),
+                                                    ],
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(dialogCtx),
+                                                      child: const Text("Cancel"),
+                                                    ),
+                                                    ElevatedButton(
+                                                      style: ElevatedButton.styleFrom(
+                                                          backgroundColor:
+                                                              primaryColorDark),
+                                                      onPressed: () async {
+                                                        if (reasonCtrl.text
+                                                                .trim()
+                                                                .isEmpty) {
+                                                          Fluttertoast.showToast(
+                                                              msg:
+                                                                  "Please enter ${isClockIn ? 'late attendance' : (shiftStatus.isEarly ? 'early checkout' : 'late checkout')} reason");
+                                                          return;
+                                                        }
+                                                        Navigator.pop(dialogCtx);
+                                                        await doSubmitAttendance(reasonCtrl.text.trim());
+                                                      },
+                                                      child: const Text("Submit",
+                                                          style: TextStyle(
+                                                              color: Colors.white)),
                                                     ),
                                                   ],
                                                 ),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () =>
-                                                        Navigator.pop(dialogCtx),
-                                                    child: const Text("Cancel"),
-                                                  ),
-                                                  ElevatedButton(
-                                                    style: ElevatedButton.styleFrom(
-                                                        backgroundColor:
-                                                            primaryColorDark),
-                                                    onPressed: () async {
-                                                      if (isLate &&
-                                                          reasonCtrl.text
-                                                              .trim()
-                                                              .isEmpty) {
-                                                        Fluttertoast.showToast(
-                                                            msg:
-                                                                "Please enter late attendance reason");
-                                                        return;
-                                                      }
-                                                      Navigator.pop(dialogCtx);
-                                                      showLoaderDialog(context);
-                                                      await ref
-                                                          .watch(postAttendanceV2Provider(
-                                                                  userPurpose:
-                                                                      reasonCtrl
-                                                                          .text
-                                                                          .trim(),
-                                                                  clockStatus:
-                                                                      isClockIn
-                                                                          ? "1"
-                                                                          : "2",
-                                                                  distance: ref
-                                                                      .watch(
-                                                                          distanceProvider)
-                                                                      .toString(),
-                                                                  image:
-                                                                      File(image),
-                                                                  lat:
-                                                                      '${ref.watch(locationProvider)?.latitude}',
-                                                                  long:
-                                                                      '${ref.watch(locationProvider)?.longitude}')
-                                                              .future)
-                                                          .then((value) {
-                                                        hideLoaderDialog(context);
-                                                        if (value['status']
-                                                                .toString() ==
-                                                            "1") {
-                                                          ref.invalidate(
-                                                              attendanceStatusProvider);
-                                                        }
-                                                        Fluttertoast.showToast(
-                                                            msg:
-                                                                '${value['message']}');
-                                                      }).onError((e, s) {
-                                                        hideLoaderDialog(context);
-                                                      });
-                                                    },
-                                                    child: const Text("Submit",
-                                                        style: TextStyle(
-                                                            color: Colors.white)),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
+                                              );
+                                            }
                                           });
                                         }
                                       },
@@ -438,8 +416,8 @@ class Dashboardpanel extends ConsumerWidget {
                     itemCount: duplicateList.length,
                     physics: NeverScrollableScrollPhysics(),
                     shrinkWrap: true,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2, childAspectRatio: 16 / 9),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2, childAspectRatio: 1.3),
                     itemBuilder: (context, index) {
                       List<Datum> distinctList = data.data!.data!
                           .where((e) =>
@@ -464,35 +442,31 @@ class Dashboardpanel extends ConsumerWidget {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                           color: primaryColor,
-                          margin: const Pad(all: 10),
+                          margin: const Pad(all: 6),
                           child: Padding(
-                            padding: const Pad(all: 10),
-                            child: RowSuper(children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${duplicateList[index].terminalName}',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: Adaptive.sp(14),
-                                        color: Colors.white),
-                                  ),
-                                  Spacer(),
-                                  Text(
-                                    '${inTotal} IN ${outTotal} OUT ',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: Adaptive.sp(18),
-                                        color: Colors.white),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(
-                                height: 10,
-                              ),
-                            ]),
+                            padding: const Pad(all: 8),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${duplicateList[index].terminalName}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: Adaptive.sp(13),
+                                      color: Colors.white),
+                                ),
+                                Text(
+                                  '${inTotal} IN ${outTotal} OUT ',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: Adaptive.sp(14),
+                                      color: Colors.white),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         onTap: () {
@@ -869,6 +843,39 @@ class Dashboardpanel extends ConsumerWidget {
                                               SizedBox(
                                                 height: 10,
                                               ),
+                                              if (data.inAttenData?[index].inRemark != null &&
+                                                  "${data.inAttenData?[index].inRemark}".trim().isNotEmpty) ...[
+                                                Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text('Reason / Remark:',
+                                                          style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                              color: Colors.black,
+                                                              fontSize:
+                                                                  Adaptive.sp(
+                                                                      14))),
+                                                    ),
+                                                    Expanded(
+                                                      child: Text(
+                                                        "${data.inAttenData?[index].inRemark}",
+                                                        textAlign: TextAlign.start,
+                                                        style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.black87,
+                                                            fontSize:
+                                                                Adaptive.sp(14)),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                SizedBox(
+                                                  height: 10,
+                                                ),
+                                              ],
                                               Row(
                                                 children: [
                                                   Expanded(
@@ -914,170 +921,107 @@ class Dashboardpanel extends ConsumerWidget {
                                               ),
                                             ]),
                                             "Request Details", approve: () {
-                                          showDialog(
-                                              context: context,
-                                              builder: (dialogContext) =>
-                                                  showConfirmAlertDialog(
-                                                      context,
-                                                      Form(
-                                                          key: reasonKey,
-                                                          child: Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              TextFormField(
-                                                                maxLines: 5,
-                                                                controller:
-                                                                    reasonController,
-                                                                validator:
-                                                                    (value) {
-                                                                  if (value ==
-                                                                          null ||
-                                                                      value
-                                                                          .isEmpty) {
-                                                                    return 'Please input reason';
-                                                                  }
-                                                                  return null;
-                                                                },
-                                                                decoration: InputDecoration(
-                                                                    label: Text(
-                                                                        'Please input reason*'),
-                                                                    contentPadding: const Pad(
-                                                                        top: 0,
-                                                                        bottom:
-                                                                            0,
-                                                                        left:
-                                                                            10),
-                                                                    border: OutlineInputBorder(
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(
-                                                                                5)),
-                                                                    enabledBorder:
-                                                                        OutlineInputBorder(
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(5))),
-                                                              ),
-                                                            ],
-                                                          )),
-                                                      "Approve", approve: () {
-                                                    if (reasonKey.currentState!
-                                                        .validate()) {
-                                                      showLoaderDialog(context);
-                                                      ref
-                                                          .watch(approveRejectRequestsProvider(
-                                                                  id:
-                                                                      "${data.inAttenData?[index].id}",
-                                                                  notes: reasonController
-                                                                      .text
-                                                                      .toString(),
-                                                                  status: "2",
-                                                                  type:
-                                                                      "in_status")
-                                                              .future)
-                                                          .then((value) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                        Navigator.of(
-                                                                dialogContext)
-                                                            .pop();
-                                                        ref.invalidate(
-                                                            attendanceRequestsInProvider);
-                                                      }).onError((e, s) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                      });
-                                                    }
-                                                  }, reject: () {
-                                                    Navigator.of(context).pop();
-                                                  }));
-                                        }, reject: () {
-                                          showDialog(
-                                              context: context,
-                                              builder: (dialogContext) =>
-                                                  showConfirmAlertDialog(
-                                                      context,
-                                                      Form(
-                                                          key: reasonKey,
-                                                          child: Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              TextFormField(
-                                                                maxLines: 5,
-                                                                controller:
-                                                                    reasonController,
-                                                                validator:
-                                                                    (value) {
-                                                                  if (value ==
-                                                                          null ||
-                                                                      value
-                                                                          .isEmpty) {
-                                                                    return 'Please input reason';
-                                                                  }
-                                                                  return null;
-                                                                },
-                                                                decoration: InputDecoration(
-                                                                    label: Text(
-                                                                        'Please input reason*'),
-                                                                    contentPadding: const Pad(
-                                                                        top: 0,
-                                                                        bottom:
-                                                                            0,
-                                                                        left:
-                                                                            10),
-                                                                    border: OutlineInputBorder(
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(
-                                                                                5)),
-                                                                    enabledBorder:
-                                                                        OutlineInputBorder(
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(5))),
-                                                              ),
-                                                            ],
-                                                          )),
-                                                      "Reject", approve: () {
-                                                    if (reasonKey.currentState!
-                                                        .validate()) {
-                                                      showLoaderDialog(context);
-                                                      ref
-                                                          .watch(approveRejectRequestsProvider(
-                                                                  id:
-                                                                      "${data.inAttenData?[index].id}",
-                                                                  notes: reasonController
-                                                                      .text
-                                                                      .toString(),
-                                                                  status: "0",
-                                                                  type:
-                                                                      "in_status")
-                                                              .future)
-                                                          .then((value) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                        Navigator.of(
-                                                                dialogContext)
-                                                            .pop();
-                                                        ref.invalidate(
-                                                            attendanceRequestsInProvider);
-                                                      }).onError((e, s) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                      });
-                                                    }
-                                                  }, reject: () {
-                                                    Navigator.of(context).pop();
-                                                  }));
-                                        }));
+                                            showLoaderDialog(context);
+                                            ref
+                                                .watch(approveRejectRequestsProvider(
+                                                        id:
+                                                            "${data.inAttenData?[index].id}",
+                                                        notes: "",
+                                                        status: "2",
+                                                        type: "in_status")
+                                                    .future)
+                                                .then((value) {
+                                              hideLoaderDialog(context);
+                                              Navigator.of(context).pop();
+                                              ref.invalidate(
+                                                  attendanceRequestsInProvider);
+                                            }).onError((e, s) {
+                                              hideLoaderDialog(context);
+                                              Navigator.of(context).pop();
+                                            });
+                                          }, reject: () {
+                                            showDialog(
+                                                context: context,
+                                                builder: (dialogContext) =>
+                                                    showConfirmAlertDialog(
+                                                        context,
+                                                        Form(
+                                                            key: reasonKey,
+                                                            child: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                TextFormField(
+                                                                  maxLines: 5,
+                                                                  controller:
+                                                                      reasonController,
+                                                                  validator:
+                                                                      (value) {
+                                                                    if (value ==
+                                                                            null ||
+                                                                        value
+                                                                            .isEmpty) {
+                                                                      return 'Please input reason';
+                                                                    }
+                                                                    return null;
+                                                                  },
+                                                                  decoration: InputDecoration(
+                                                                      label: Text(
+                                                                          'Please input reason*'),
+                                                                      contentPadding: const Pad(
+                                                                          top: 0,
+                                                                          bottom:
+                                                                              0,
+                                                                          left:
+                                                                              10),
+                                                                      border: OutlineInputBorder(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(
+                                                                                  5)),
+                                                                      enabledBorder:
+                                                                          OutlineInputBorder(
+                                                                              borderRadius:
+                                                                                  BorderRadius.circular(5))),
+                                                                ),
+                                                              ],
+                                                            )),
+                                                        "Reject", approve: () {
+                                                      if (reasonKey.currentState!
+                                                          .validate()) {
+                                                        showLoaderDialog(context);
+                                                        ref
+                                                            .watch(approveRejectRequestsProvider(
+                                                                    id:
+                                                                        "${data.inAttenData?[index].id}",
+                                                                    notes: reasonController
+                                                                        .text
+                                                                        .toString(),
+                                                                    status: "0",
+                                                                    type:
+                                                                        "in_status")
+                                                                .future)
+                                                            .then((value) {
+                                                          hideLoaderDialog(
+                                                              context);
+                                                          Navigator.of(context)
+                                                              .pop();
+                                                          Navigator.of(
+                                                                  dialogContext)
+                                                              .pop();
+                                                          ref.invalidate(
+                                                              attendanceRequestsInProvider);
+                                                        }).onError((e, s) {
+                                                          hideLoaderDialog(
+                                                              context);
+                                                          Navigator.of(context)
+                                                              .pop();
+                                                        });
+                                                      }
+                                                    }, reject: () {
+                                                      Navigator.of(context).pop();
+                                                    }));
+                                          }));
                               },
                           ),
                           textAlign: TextAlign.center,
@@ -1255,6 +1199,39 @@ class Dashboardpanel extends ConsumerWidget {
                                               SizedBox(
                                                 height: 10,
                                               ),
+                                              if (data.outAttenData?[index].outRemark != null &&
+                                                  "${data.outAttenData?[index].outRemark}".trim().isNotEmpty) ...[
+                                                Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text('Reason / Remark:',
+                                                          style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                              color: Colors.black,
+                                                              fontSize:
+                                                                  Adaptive.sp(
+                                                                      14))),
+                                                    ),
+                                                    Expanded(
+                                                      child: Text(
+                                                        "${data.outAttenData?[index].outRemark}",
+                                                        textAlign: TextAlign.start,
+                                                        style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.black87,
+                                                            fontSize:
+                                                                Adaptive.sp(14)),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                SizedBox(
+                                                  height: 10,
+                                                ),
+                                              ],
                                               Row(
                                                 children: [
                                                   Expanded(
@@ -1300,91 +1277,28 @@ class Dashboardpanel extends ConsumerWidget {
                                               ),
                                             ]),
                                             "Request Details", approve: () {
+                                            showLoaderDialog(context);
+                                            ref
+                                                .watch(approveRejectRequestsProvider(
+                                                        id:
+                                                            "${data.outAttenData?[index].id}",
+                                                        notes: "",
+                                                        status: "2",
+                                                        type: "out_status")
+                                                    .future)
+                                                .then((value) {
+                                              hideLoaderDialog(context);
+                                              Navigator.of(context).pop();
+                                              ref.invalidate(
+                                                  attendanceRequestsOutProvider);
+                                            }).onError((e, s) {
+                                              hideLoaderDialog(context);
+                                              Navigator.of(context).pop();
+                                            });
+                                          }, reject: () {
                                           showDialog(
                                               context: context,
                                               builder: (dialogContext) =>
-                                                  showConfirmAlertDialog(
-                                                      context,
-                                                      Form(
-                                                          key: reasonKey,
-                                                          child: Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              TextFormField(
-                                                                maxLines: 5,
-                                                                controller:
-                                                                    reasonController,
-                                                                validator:
-                                                                    (value) {
-                                                                  if (value ==
-                                                                          null ||
-                                                                      value
-                                                                          .isEmpty) {
-                                                                    return 'Please input reason';
-                                                                  }
-                                                                  return null;
-                                                                },
-                                                                decoration: InputDecoration(
-                                                                    label: Text(
-                                                                        'Please input reason*'),
-                                                                    contentPadding: const Pad(
-                                                                        top: 0,
-                                                                        bottom:
-                                                                            0,
-                                                                        left:
-                                                                            10),
-                                                                    border: OutlineInputBorder(
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(
-                                                                                5)),
-                                                                    enabledBorder:
-                                                                        OutlineInputBorder(
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(5))),
-                                                              ),
-                                                            ],
-                                                          )),
-                                                      "Approve", approve: () {
-                                                    if (reasonKey.currentState!
-                                                        .validate()) {
-                                                      showLoaderDialog(context);
-                                                      ref
-                                                          .watch(approveRejectRequestsProvider(
-                                                                  id:
-                                                                      "${data.outAttenData?[index].id}",
-                                                                  notes: reasonController
-                                                                      .text
-                                                                      .toString(),
-                                                                  status: "2",
-                                                                  type:
-                                                                      "out_status")
-                                                              .future)
-                                                          .then((value) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                        Navigator.of(
-                                                                dialogContext)
-                                                            .pop();
-                                                        ref.invalidate(
-                                                            attendanceRequestsOutProvider);
-                                                      }).onError((e, s) {
-                                                        hideLoaderDialog(
-                                                            context);
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                      });
-                                                    }
-                                                  }, reject: () {
-                                                    Navigator.of(context).pop();
-                                                  }));
-                                        }, reject: () {
-                                          showDialog(
-                                              context: context,
-                                              builder: (context) =>
                                                   showConfirmAlertDialog(
                                                       context,
                                                       Form(

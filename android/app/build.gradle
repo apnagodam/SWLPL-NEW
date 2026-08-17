@@ -32,13 +32,13 @@ if (flutterVersionName == null) {
 android {
     namespace "com.apnagodam.staff"
     compileSdkVersion 36
-    ndkVersion "27.0.12077973"
+    ndkVersion "28.2.13676358"
 
     signingConfigs {
         release {
             keyAlias 'upload'
             keyPassword 'apnagodam123'
-            storeFile file('D:/SWLPL-Flutter-develop/upload-keystore.jks')
+            storeFile file('upload-keystore.jks')
             storePassword 'apnagodam123'
         }
     }
@@ -47,8 +47,8 @@ android {
         applicationId "apnagodam.staff"
         minSdkVersion 24
         targetSdkVersion 35
-        versionCode 116
-        versionName '1.1.6'
+        versionCode 119
+        versionName '1.1.9'
         multiDexEnabled true
     }
 

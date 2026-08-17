@@ -17,6 +17,7 @@ import 'package:zoom_pinch_overlay/zoom_pinch_overlay.dart';
 
 import '../../../Data/SharedPrefs/SharedUtility.dart';
 import '../../../Domain/Attendance/AttendanceService.dart';
+import '../../../Domain/Authentication/AuthenticationService.dart';
 import '../../Constants/ColorConstant.dart';
 import '../TruckBook/CreateTruckBook.dart';
 
@@ -210,97 +211,120 @@ class _AttendanceMarkingScreenState
                                        ],
                                        borderWidth: 1,
                                        onTap: () async {
-                                         if (ref.watch(attendanceImageProvider) == null) {
-                                           Fluttertoast.showToast(msg: "Please Select Image");
-                                           return;
-                                         }
-                                         final lateCheck = ref.read(checkForLateProvider).valueOrNull;
-                                         bool isLate = (lateCheck?.askReason == 1 || lateCheck?.status == 1);
-                                         TextEditingController dialogReasonCtrl = TextEditingController();
+                                           if (ref.watch(attendanceImageProvider) == null) {
+                                             Fluttertoast.showToast(msg: "Please Select Image");
+                                             return;
+                                           }
 
-                                         showDialog(
-                                           context: context,
-                                           barrierDismissible: false,
-                                           builder: (dialogCtx) => AlertDialog(
-                                             title: const Text("Late Checkin Reason"),
-                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                             content: Column(
-                                               mainAxisSize: MainAxisSize.min,
-                                               crossAxisAlignment: CrossAxisAlignment.start,
-                                               children: [
-                                                 if (isLate) ...[
-                                                   Container(
-                                                     padding: const EdgeInsets.all(8),
-                                                     decoration: BoxDecoration(
-                                                       color: Colors.amber.shade100,
-                                                       borderRadius: BorderRadius.circular(6),
-                                                       border: Border.all(color: Colors.amber.shade800),
-                                                     ),
-                                                     child: Row(
-                                                       children: [
-                                                         Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900),
-                                                         const SizedBox(width: 6),
-                                                         Expanded(
-                                                           child: Text(
-                                                             lateCheck?.message ?? "You are marking late attendance. Please enter reason below.",
-                                                             style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold, fontSize: Adaptive.sp(13)),
-                                                           ),
-                                                         ),
-                                                       ],
-                                                     ),
-                                                   ),
-                                                   const SizedBox(height: 10),
-                                                 ],
-                                                 TextField(
-                                                   controller: dialogReasonCtrl,
-                                                   maxLines: 3,
-                                                   decoration: InputDecoration(
-                                                     labelText: isLate ? "Reason for Late Attendance *" : "Purpose / Notes",
-                                                     hintText: "Enter reason here...",
-                                                     border: const OutlineInputBorder(),
-                                                   ),
-                                                 ),
-                                               ],
-                                             ),
-                                             actions: [
-                                               TextButton(
-                                                 onPressed: () => Navigator.pop(dialogCtx),
-                                                 child: const Text("Cancel"),
-                                               ),
-                                               ElevatedButton(
-                                                 style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
-                                                 onPressed: () async {
-                                                   if (isLate && dialogReasonCtrl.text.trim().isEmpty) {
-                                                     Fluttertoast.showToast(msg: "Please enter late attendance reason");
-                                                     return;
-                                                   }
-                                                   Navigator.pop(dialogCtx);
-                                                   showLoaderDialog(context);
-                                                   await ref.watch(postAttendanceV2Provider(
-                                                     userPurpose: dialogReasonCtrl.text.trim(),
-                                                     clockStatus: '1',
-                                                     distance: ref.watch(distanceProvider).toString(),
-                                                     image: ref.watch(attendanceImageProvider),
-                                                     lat: '${ref.watch(locationProvider)?.latitude}',
-                                                     long: '${ref.watch(locationProvider)?.longitude}',
-                                                   ).future).then((value) {
-                                                     hideLoaderDialog(context);
-                                                     if (value['status'].toString() == "1") {
-                                                       ref.invalidate(attendanceStatusProvider);
-                                                       ref.invalidate(attendanceImageProvider);
-                                                       ref.watch(goRouterProvider).pop();
-                                                     }
-                                                     Fluttertoast.showToast(msg: '${value['message']}');
-                                                   }).onError((e, s) {
-                                                     hideLoaderDialog(context);
-                                                   });
-                                                 },
-                                                 child: const Text("Submit", style: TextStyle(color: Colors.white)),
-                                               ),
-                                             ],
-                                           ),
-                                         );
-                                       },
+                                            final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
+                                            final shiftStart = profileData?.shiftStart;
+                                            final shiftStatus = getShiftAttendanceStatus(shiftStart, isCheckIn: true);
+
+                                            Future<void> submitClockIn(String purpose) async {
+                                              showLoaderDialog(context);
+                                              try {
+                                                // 1. Hit late reason API
+                                                try {
+                                                  await ref.read(checkForLateProvider.future);
+                                                } catch (_) {}
+
+                                                // 2. Hit attendance API
+                                                var value = await ref.read(postAttendanceV2Provider(
+                                                  userPurpose: purpose,
+                                                  clockStatus: '1',
+                                                  distance: ref.read(distanceProvider).toString(),
+                                                  image: ref.read(attendanceImageProvider),
+                                                  lat: '${ref.read(locationProvider)?.latitude}',
+                                                  long: '${ref.read(locationProvider)?.longitude}',
+                                                ).future);
+
+                                                hideLoaderDialog(context);
+                                                if (value['status'].toString() == "1") {
+                                                  ref.invalidate(attendanceStatusProvider);
+                                                  ref.invalidate(attendanceImageProvider);
+                                                  ref.read(goRouterProvider).pop();
+                                                }
+                                                Fluttertoast.showToast(msg: '${value['message']}');
+                                              } catch (e) {
+                                                hideLoaderDialog(context);
+                                              }
+                                            }
+
+                                            if (!shiftStatus.requiresReason) {
+                                              await submitClockIn("");
+                                            } else {
+                                              TextEditingController dialogReasonCtrl = TextEditingController();
+
+                                              showDialog(
+                                                context: context,
+                                                barrierDismissible: false,
+                                                builder: (dialogCtx) => AlertDialog(
+                                                  title: const Text("Late Checkin Reason"),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                  content: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                        margin: const EdgeInsets.only(bottom: 8),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.amber.shade50,
+                                                          borderRadius: BorderRadius.circular(8),
+                                                          border: Border.all(color: Colors.amber.shade300),
+                                                        ),
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.amber.shade800),
+                                                            const SizedBox(width: 6),
+                                                            Expanded(
+                                                              child: Text(
+                                                                shiftStatus.label.isNotEmpty
+                                                                    ? shiftStatus.label
+                                                                    : "Shift Start: ${shiftStart ?? 'Scheduled'} (Late Check-in)",
+                                                                style: TextStyle(
+                                                                  fontSize: Adaptive.sp(11),
+                                                                  color: Colors.amber.shade900,
+                                                                  fontWeight: FontWeight.w600,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      TextField(
+                                                        controller: dialogReasonCtrl,
+                                                        maxLines: 3,
+                                                        decoration: const InputDecoration(
+                                                          labelText: "Reason for Late Attendance *",
+                                                          hintText: "Enter reason here...",
+                                                          border: OutlineInputBorder(),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () => Navigator.pop(dialogCtx),
+                                                      child: const Text("Cancel"),
+                                                    ),
+                                                    ElevatedButton(
+                                                      style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
+                                                      onPressed: () async {
+                                                        if (dialogReasonCtrl.text.trim().isEmpty) {
+                                                          Fluttertoast.showToast(msg: "Please enter late attendance reason");
+                                                          return;
+                                                        }
+                                                        Navigator.pop(dialogCtx);
+                                                        await submitClockIn(dialogReasonCtrl.text.trim());
+                                                      },
+                                                      child: const Text("Submit", style: TextStyle(color: Colors.white)),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }
+                                          },
                                        child: Text(
                                          'Clock In',
                                          textAlign: TextAlign.center,
@@ -334,97 +358,125 @@ class _AttendanceMarkingScreenState
                                        ],
                                        borderWidth: 1,
                                        onTap: () async {
-                                         if (ref.watch(attendanceImageProvider) == null) {
-                                           Fluttertoast.showToast(msg: "Please Select Image");
-                                           return;
-                                         }
-                                         final lateCheck = ref.read(checkForLateProvider).valueOrNull;
-                                         bool isLate = (lateCheck?.askReason == 1 || lateCheck?.status == 1);
-                                         TextEditingController dialogReasonCtrl = TextEditingController();
+                                            if (ref.watch(attendanceImageProvider) == null) {
+                                              Fluttertoast.showToast(msg: "Please Select Image");
+                                              return;
+                                            }
 
-                                         showDialog(
-                                           context: context,
-                                           barrierDismissible: false,
-                                           builder: (dialogCtx) => AlertDialog(
-                                             title: const Text("Late Checkout Reason"),
-                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                             content: Column(
-                                               mainAxisSize: MainAxisSize.min,
-                                               crossAxisAlignment: CrossAxisAlignment.start,
-                                               children: [
-                                                 if (isLate) ...[
-                                                   Container(
-                                                     padding: const EdgeInsets.all(8),
-                                                     decoration: BoxDecoration(
-                                                       color: Colors.amber.shade100,
-                                                       borderRadius: BorderRadius.circular(6),
-                                                       border: Border.all(color: Colors.amber.shade800),
-                                                     ),
-                                                     child: Row(
-                                                       children: [
-                                                         Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900),
-                                                         const SizedBox(width: 6),
-                                                         Expanded(
-                                                           child: Text(
-                                                             lateCheck?.message ?? "You are marking late attendance. Please enter reason below.",
-                                                             style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold, fontSize: Adaptive.sp(13)),
-                                                           ),
-                                                         ),
-                                                       ],
-                                                     ),
-                                                   ),
-                                                   const SizedBox(height: 10),
-                                                 ],
-                                                 TextField(
-                                                   controller: dialogReasonCtrl,
-                                                   maxLines: 3,
-                                                   decoration: InputDecoration(
-                                                     labelText: isLate ? "Reason for Late Attendance *" : "Purpose / Notes",
-                                                     hintText: "Enter reason here...",
-                                                     border: const OutlineInputBorder(),
-                                                   ),
-                                                 ),
-                                               ],
-                                             ),
-                                             actions: [
-                                               TextButton(
-                                                 onPressed: () => Navigator.pop(dialogCtx),
-                                                 child: const Text("Cancel"),
-                                               ),
-                                               ElevatedButton(
-                                                 style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
-                                                 onPressed: () async {
-                                                   if (isLate && dialogReasonCtrl.text.trim().isEmpty) {
-                                                     Fluttertoast.showToast(msg: "Please enter late attendance reason");
-                                                     return;
-                                                   }
-                                                   Navigator.pop(dialogCtx);
-                                                   showLoaderDialog(context);
-                                                   await ref.watch(postAttendanceV2Provider(
-                                                     userPurpose: dialogReasonCtrl.text.trim(),
-                                                     clockStatus: '2',
-                                                     distance: ref.watch(distanceProvider).toString(),
-                                                     image: ref.watch(attendanceImageProvider),
-                                                     lat: '${ref.watch(locationProvider)?.latitude}',
-                                                     long: '${ref.watch(locationProvider)?.longitude}',
-                                                   ).future).then((value) {
-                                                     hideLoaderDialog(context);
-                                                     if (value['status'].toString() == "1") {
-                                                       ref.invalidate(attendanceStatusProvider);
-                                                       ref.invalidate(attendanceImageProvider);
-                                                       ref.watch(goRouterProvider).pop();
-                                                     }
-                                                     Fluttertoast.showToast(msg: '${value['message']}');
-                                                   }).onError((e, s) {
-                                                     hideLoaderDialog(context);
-                                                   });
-                                                 },
-                                                 child: const Text("Submit", style: TextStyle(color: Colors.white)),
-                                               ),
-                                             ],
-                                           ),
-                                         );
-                                       },
+                                            final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
+                                            final shiftEnd = profileData?.shiftEnd;
+                                            final shiftStatus = getShiftAttendanceStatus(shiftEnd, isCheckIn: false);
+
+                                            Future<void> submitClockOut(String purpose) async {
+                                              showLoaderDialog(context);
+                                              try {
+                                                // 1. Hit late reason API
+                                                try {
+                                                  await ref.read(checkForLateProvider.future);
+                                                } catch (_) {}
+
+                                                // 2. Hit attendance API
+                                                var value = await ref.read(postAttendanceV2Provider(
+                                                  userPurpose: purpose,
+                                                  clockStatus: '2',
+                                                  distance: ref.read(distanceProvider).toString(),
+                                                  image: ref.read(attendanceImageProvider),
+                                                  lat: '${ref.read(locationProvider)?.latitude}',
+                                                  long: '${ref.read(locationProvider)?.longitude}',
+                                                ).future);
+
+                                                hideLoaderDialog(context);
+                                                if (value['status'].toString() == "1") {
+                                                  ref.invalidate(attendanceStatusProvider);
+                                                  ref.invalidate(attendanceImageProvider);
+                                                  ref.read(goRouterProvider).pop();
+                                                }
+                                                Fluttertoast.showToast(msg: '${value['message']}');
+                                              } catch (e) {
+                                                hideLoaderDialog(context);
+                                              }
+                                            }
+
+                                            if (!shiftStatus.requiresReason) {
+                                              await submitClockOut("");
+                                            } else {
+                                              TextEditingController dialogReasonCtrl = TextEditingController();
+
+                                              showDialog(
+                                                context: context,
+                                                barrierDismissible: false,
+                                                builder: (dialogCtx) => AlertDialog(
+                                                  title: Text(shiftStatus.isEarly
+                                                      ? "Early Checkout Reason"
+                                                      : "Late Checkout Reason"),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                  content: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                        margin: const EdgeInsets.only(bottom: 8),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.amber.shade50,
+                                                          borderRadius: BorderRadius.circular(8),
+                                                          border: Border.all(color: Colors.amber.shade300),
+                                                        ),
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.amber.shade800),
+                                                            const SizedBox(width: 6),
+                                                            Expanded(
+                                                              child: Text(
+                                                                shiftStatus.label.isNotEmpty
+                                                                    ? shiftStatus.label
+                                                                    : "Shift End: ${shiftEnd ?? 'Scheduled'} (${shiftStatus.isEarly ? 'Early Checkout' : 'Late Checkout'})",
+                                                                style: TextStyle(
+                                                                  fontSize: Adaptive.sp(11),
+                                                                  color: Colors.amber.shade900,
+                                                                  fontWeight: FontWeight.w600,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      TextField(
+                                                        controller: dialogReasonCtrl,
+                                                        maxLines: 3,
+                                                        decoration: InputDecoration(
+                                                          labelText: shiftStatus.isEarly
+                                                              ? "Reason for Early Checkout *"
+                                                              : "Reason for Late Checkout *",
+                                                          hintText: "Enter reason here...",
+                                                          border: const OutlineInputBorder(),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () => Navigator.pop(dialogCtx),
+                                                      child: const Text("Cancel"),
+                                                    ),
+                                                    ElevatedButton(
+                                                      style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
+                                                      onPressed: () async {
+                                                        if (dialogReasonCtrl.text.trim().isEmpty) {
+                                                          Fluttertoast.showToast(
+                                                              msg: "Please enter ${shiftStatus.isEarly ? 'early checkout' : 'late checkout'} reason");
+                                                          return;
+                                                        }
+                                                        Navigator.pop(dialogCtx);
+                                                        await submitClockOut(dialogReasonCtrl.text.trim());
+                                                      },
+                                                      child: const Text("Submit", style: TextStyle(color: Colors.white)),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }
+                                          },
                                        child: Text(
                                          'Clock Out',
                                          textAlign: TextAlign.center,
