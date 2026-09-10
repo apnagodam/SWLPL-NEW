@@ -216,9 +216,7 @@ Future<bool> requestLocationPermission() async {
 
   serviceEnabled = await Geolocator.isLocationServiceEnabled();
   if (!serviceEnabled) {
-    Fluttertoast.showToast(msg: "Location Services are disabled.");
-    Geolocator.openLocationSettings();
-    return Future.error('Location services are disabled.');
+    return false;
   }
 
   permission = await Geolocator.checkPermission();
@@ -226,16 +224,16 @@ Future<bool> requestLocationPermission() async {
     permission = await Geolocator.requestPermission();
 
     if (permission == LocationPermission.denied) {
-      Fluttertoast.showToast(msg: "Location permission denied.");
+      return false;
     }
   }
 
   if (permission == LocationPermission.deniedForever) {
-    Geolocator.openLocationSettings();
     return false;
   }
 
-  return true;
+  return permission == LocationPermission.whileInUse ||
+      permission == LocationPermission.always;
 }
 
 Future<bool> isLocationPermissionGranted() async {
@@ -440,26 +438,35 @@ ElevarmPrimaryButton simpleButton(
           ElevarmPrimaryButtonThemeData(primaryColor: primaryColor),
     );
 Future<String?> createStampedImageFile(XFile imageFile, WidgetRef ref) async {
-  await requestLocationPermission();
-  return WatermarkUnique().addTextWatermark(
-    filePath: imageFile.path, // image file path
-    text:
-        '\n${ref.watch(sharedUtilityProvider).getUser()?.firstName} ${ref.watch(sharedUtilityProvider).getUser()?.lastName} (${ref.watch(sharedUtilityProvider).getUser()?.empId})\n${ref.watch(addressProvider)} \n${ref.watch(locationProvider)?.latitude ?? 0.0}, ${ref.watch(locationProvider)?.longitude ?? 0.0}  \n${DateTime.now()}', // watermark text
-    x: 10, // position by x
-    y: 20, // position by y
-    quality: 35, //
-    textSize: 18, // text size
-    color: Colors.white, // color of text
-    imageFormat: ImageFormat.jpeg,
-    isNeedRotateToPortrait:
-        true, // rotation image to portrait (Default: false) ONLY ANDROID
-    backgroundTextColor:
-        Colors.black.withOpacity(0.6), // color of background text (optional)
-    backgroundTextPaddingLeft: 12, // padding of background text (optional)
-    backgroundTextPaddingTop: 12, // padding of background text (optional)
-    backgroundTextPaddingRight: 12, // padding of background text (optional)
-    backgroundTextPaddingBottom: 12, // padding of background text (optional)
-  );
+  try {
+    await requestLocationPermission();
+    final user = ref.read(sharedUtilityProvider).getUser();
+    final address = ref.read(addressProvider);
+    final loc = ref.read(locationProvider);
+    return await WatermarkUnique().addTextWatermark(
+      filePath: imageFile.path, // image file path
+      text:
+          '\n${user?.firstName} ${user?.lastName} (${user?.empId})\n$address \n${loc?.latitude ?? 0.0}, ${loc?.longitude ?? 0.0}  \n${DateTime.now()}', // watermark text
+      x: 10, // position by x
+      y: 20, // position by y
+      quality: 35, //
+      textSize: 18, // text size
+      color: Colors.white, // color of text
+      imageFormat: ImageFormat.jpeg,
+      isNeedRotateToPortrait:
+          true, // rotation image to portrait (Default: false) ONLY ANDROID
+      backgroundTextColor:
+          Colors.black.withOpacity(0.6), // color of background text (optional)
+      backgroundTextPaddingLeft: 12, // padding of background text (optional)
+      backgroundTextPaddingTop: 12, // padding of background text (optional)
+      backgroundTextPaddingRight: 12, // padding of background text (optional)
+      backgroundTextPaddingBottom: 12, // padding of background text (optional)
+    );
+  } catch (e, s) {
+    debugPrint("Watermark failed: $e");
+    debugPrintStack(stackTrace: s);
+    return null;
+  }
 }
 
 @riverpod

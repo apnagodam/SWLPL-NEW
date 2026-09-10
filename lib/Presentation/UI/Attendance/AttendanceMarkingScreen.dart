@@ -98,29 +98,30 @@ class _AttendanceMarkingScreenState
                                               )
                                             : InkWell(
                                                 onTap: () async {
+                                                  showLoaderDialog(context);
                                                   try {
-                                                    pickImage()
-                                                        .then((value) async {
-                                                      if (value != null) {
-                                                        await createStampedImageFile(
-                                                                value, ref)
-                                                            .then((value) {
-                                                          if (value != null) {
-                                                            ref
-                                                                .watch(
-                                                                    attendanceImageProvider
-                                                                        .notifier)
-                                                                .state = File(value);
-                                                          }
-                                                        });
+                                                    final value = await pickImage();
+                                                    if (value != null) {
+                                                      String? stamped;
+                                                      try {
+                                                        stamped = await createStampedImageFile(value, ref);
+                                                      } catch (e) {
+                                                        debugPrint("Watermark failed: $e");
                                                       }
-                                                    });
+                                                      final finalPath = stamped ?? value.path;
+                                                      ref
+                                                          .read(
+                                                              attendanceImageProvider
+                                                                  .notifier)
+                                                          .state = File(finalPath);
+                                                    }
                                                   } catch (e, s) {
                                                     debugPrintStack(
                                                       stackTrace: s,
                                                     );
+                                                  } finally {
+                                                    hideLoaderDialog(context);
                                                   }
-                                                  // checkLocationPermission(ref);
                                                 },
                                                 child: ZoomOverlay(
                                                   modalBarrierColor:
@@ -143,12 +144,13 @@ class _AttendanceMarkingScreenState
                                                   // optional VoidCallback
                                                   onScaleStop: () {},
                                                   // optional VoidCallback
-                                                  child: Image.memory(
-                                                    ref
-                                                            .watch(
-                                                                attendanceImageProvider)
-                                                            ?.readAsBytesSync() ??
-                                                        Uint8List(0),
+                                                  child: Image.file(
+                                                    ref.watch(
+                                                        attendanceImageProvider)!,
+                                                    key: ValueKey(ref
+                                                        .watch(
+                                                            attendanceImageProvider)!
+                                                        .path),
                                                     fit: BoxFit.contain,
                                                     height: 250,
                                                   ),
@@ -157,32 +159,32 @@ class _AttendanceMarkingScreenState
                                       ),
                                     ),
                                     onTap: () async {
-                                      // showLoaderDialog(context);
+                                      showLoaderDialog(context);
                                       try {
-                                        pickImage(
+                                        final value = await pickImage(
                                           source: ImageSource.camera,
-                                        ).then((value) async {
-                                          if (value != null) {
-                                            await createStampedImageFile(
-                                                    value, ref)
-                                                .then((value) {
-                                              if (value != null) {
-                                                ref
-                                                    .watch(
-                                                        attendanceImageProvider
-                                                            .notifier)
-                                                    .state = File(value);
-                                              }
-                                            });
+                                        );
+                                        if (value != null) {
+                                          String? stamped;
+                                          try {
+                                            stamped = await createStampedImageFile(value, ref);
+                                          } catch (e) {
+                                            debugPrint("Watermark failed: $e");
                                           }
-                                        });
+                                          final finalPath = stamped ?? value.path;
+                                          ref
+                                              .read(
+                                                  attendanceImageProvider
+                                                      .notifier)
+                                              .state = File(finalPath);
+                                        }
                                       } catch (e, s) {
                                         debugPrintStack(
                                           stackTrace: s,
                                         );
+                                      } finally {
+                                        hideLoaderDialog(context);
                                       }
-                                      // hideLoaderDialog(context);
-                                      // checkLocationPermission(ref);
                                     },
                                   ),
                                 ),
@@ -363,9 +365,9 @@ class _AttendanceMarkingScreenState
                                               return;
                                             }
 
-                                            final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
-                                            final shiftEnd = profileData?.shiftEnd;
-                                            final shiftStatus = getShiftAttendanceStatus(shiftEnd, isCheckIn: false);
+                                             final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
+                                             final shiftEnd = profileData?.shiftEnd;
+                                             final shiftStatus = getShiftAttendanceStatus(shiftEnd, isCheckIn: false);
 
                                             Future<void> submitClockOut(String purpose) async {
                                               showLoaderDialog(context);

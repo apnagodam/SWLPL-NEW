@@ -119,7 +119,9 @@ class Dashboardpanel extends ConsumerWidget {
                                                   ref)
                                               .then((image) async {
                                             hideLoaderDialog(context);
-                                            if (image == null) return;
+                                            final finalImagePath =
+                                                image ?? mediaCapture.captureRequest.path;
+                                            if (finalImagePath == null) return;
 
                                             bool isClockIn = attendanceData.clockStatus.toString() != "2";
                                             final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
@@ -139,7 +141,7 @@ class Dashboardpanel extends ConsumerWidget {
                                                         userPurpose: purpose,
                                                         clockStatus: isClockIn ? "1" : "2",
                                                         distance: ref.read(distanceProvider).toString(),
-                                                        image: File(image),
+                                                        image: File(finalImagePath),
                                                         lat: '${ref.read(locationProvider)?.latitude}',
                                                         long: '${ref.read(locationProvider)?.longitude}')
                                                     .future);
@@ -1438,7 +1440,7 @@ class Dashboardpanel extends ConsumerWidget {
       currentInStatus = "Quality Approval Pending from user side";
     } else if (data?.sKParchi == null) {
       currentInStatus = "Add Second Kanta Parchi";
-    } else if (data?.sQualityReport == null) {
+    } else if (data?.sQualityReport == null && data?.sendToLab == null) {
       currentInStatus = "Add Second Quality Report";
     }
 
@@ -1477,7 +1479,7 @@ class Dashboardpanel extends ConsumerWidget {
       currentOutStatus = "Add Labour";
     } else if (data?.firstKantaParchi == null) {
       currentOutStatus = "Add First Kanta Parchi";
-    } else if (data?.sQualityReport == null || data?.sQualityReport == null) {
+    } else if (data?.sQualityReport == null && data?.sendToLab == null) {
       currentOutStatus = "Add Second Quality Report";
     } else if (data?.sKParchi == null) {
       currentOutStatus = "Add Second Kanta Parchi";
@@ -1500,8 +1502,9 @@ class Dashboardpanel extends ConsumerWidget {
       }
     } else if (data?.gatepassReport == null) {
       currentOutStatus = "Gatepass Approval Pending";
-    } else
-      "Done";
+    } else {
+      currentOutStatus = "Done";
+    }
 
     return currentOutStatus;
   }

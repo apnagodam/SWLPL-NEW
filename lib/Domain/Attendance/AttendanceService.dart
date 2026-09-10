@@ -136,7 +136,63 @@ class ShiftAttendanceStatus {
   });
 }
 
-ShiftAttendanceStatus getShiftAttendanceStatus(dynamic shiftTimeString, {bool isCheckIn = true}) {
+DateTime? parseShiftTimeToToday(dynamic shiftTimeString, DateTime now) {
+  if (shiftTimeString == null || shiftTimeString.toString().trim().isEmpty) {
+    return null;
+  }
+  try {
+    String raw = shiftTimeString.toString().trim();
+    if (raw.contains('-') && raw.contains(':')) {
+      final parsedDate = DateTime.tryParse(raw);
+      if (parsedDate != null) {
+        return DateTime(
+          now.year,
+          now.month,
+          now.day,
+          parsedDate.hour,
+          parsedDate.minute,
+          parsedDate.second,
+        );
+      }
+    }
+
+    String timeStr = raw.toUpperCase();
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+
+    bool hasPM = timeStr.contains('PM');
+    bool hasAM = timeStr.contains('AM');
+
+    String cleaned = timeStr.replaceAll('AM', '').replaceAll('PM', '').trim();
+    List<String> parts = cleaned.split(':');
+
+    if (parts.isNotEmpty) {
+      hour = int.parse(parts[0].trim());
+    }
+    if (parts.length > 1) {
+      minute = int.parse(parts[1].trim());
+    }
+    if (parts.length > 2) {
+      second = int.tryParse(parts[2].trim()) ?? 0;
+    }
+
+    if (hasPM && hour < 12) {
+      hour += 12;
+    } else if (hasAM && hour == 12) {
+      hour = 0;
+    }
+
+    return DateTime(now.year, now.month, now.day, hour, minute, second);
+  } catch (e) {
+    return null;
+  }
+}
+
+ShiftAttendanceStatus getShiftAttendanceStatus(
+  dynamic shiftTimeString, {
+  bool isCheckIn = true,
+}) {
   if (shiftTimeString == null || shiftTimeString.toString().trim().isEmpty) {
     return ShiftAttendanceStatus(
       requiresReason: false,
@@ -148,54 +204,18 @@ ShiftAttendanceStatus getShiftAttendanceStatus(dynamic shiftTimeString, {bool is
   }
 
   try {
-    String raw = shiftTimeString.toString().trim();
     final now = DateTime.now();
-
-    DateTime? shiftDateTime;
-
-    if (raw.contains('-') && raw.contains(':')) {
-      final parsedDate = DateTime.tryParse(raw);
-      if (parsedDate != null) {
-        shiftDateTime = DateTime(
-          now.year,
-          now.month,
-          now.day,
-          parsedDate.hour,
-          parsedDate.minute,
-          parsedDate.second,
-        );
-      }
-    }
+    String raw = shiftTimeString.toString().trim();
+    DateTime? shiftDateTime = parseShiftTimeToToday(raw, now);
 
     if (shiftDateTime == null) {
-      String timeStr = raw.toUpperCase();
-      int hour = 0;
-      int minute = 0;
-      int second = 0;
-
-      bool hasPM = timeStr.contains('PM');
-      bool hasAM = timeStr.contains('AM');
-
-      String cleaned = timeStr.replaceAll('AM', '').replaceAll('PM', '').trim();
-      List<String> parts = cleaned.split(':');
-
-      if (parts.isNotEmpty) {
-        hour = int.parse(parts[0].trim());
-      }
-      if (parts.length > 1) {
-        minute = int.parse(parts[1].trim());
-      }
-      if (parts.length > 2) {
-        second = int.tryParse(parts[2].trim()) ?? 0;
-      }
-
-      if (hasPM && hour < 12) {
-        hour += 12;
-      } else if (hasAM && hour == 12) {
-        hour = 0;
-      }
-
-      shiftDateTime = DateTime(now.year, now.month, now.day, hour, minute, second);
+      return ShiftAttendanceStatus(
+        requiresReason: false,
+        isCheckIn: isCheckIn,
+        isEarly: false,
+        isLate: false,
+        label: "",
+      );
     }
 
     if (isCheckIn) {

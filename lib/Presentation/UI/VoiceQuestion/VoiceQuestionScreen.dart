@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:emp_apnagodam/Domain/dio/DioProvider.dart';
-import 'package:emp_apnagodam/Presentation/Widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../Constants/ColorConstant.dart';
+import '../../../Domain/Whisper/WhisperService.dart';
 
 class VoiceQuestionScreen extends ConsumerStatefulWidget {
   const VoiceQuestionScreen({super.key});
@@ -26,10 +25,16 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
 
   bool _isSpeechInitialized = false;
   bool _isListening = false;
+  bool _isTranscribing = false;
+  bool _isSubmitting = false;
+
   double _soundLevel = 0.0;
-  String _selectedLocaleId = 'en_IN';
-  List<LocaleName> _availableLocales = [];
-  String _statusMessage = "Tap mic to start speaking";
+  String _selectedLanguage = 'hi_IN'; // 'hi_IN' (Hindi) or 'en_IN' (English)
+  String _statusMessage = "Tap mic to speak";
+  int _recordingSeconds = 0;
+  Timer? _recordingTimer;
+  String? _currentAudioPath;
+
 
   late AnimationController _pulseController;
   late AnimationController _waveController;
@@ -39,13 +44,13 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
   void initState() {
     super.initState();
     _initAnimations();
-    _initSpeech();
+    _initSpeechEngine();
   }
 
   void _initAnimations() {
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 900),
     );
 
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.25).animate(
@@ -66,7 +71,7 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
     )..repeat(reverse: true);
   }
 
-  Future<void> _initSpeech() async {
+  Future<void> _initSpeechEngine() async {
     try {
       bool available = await _speechToText.initialize(
         onError: _onSpeechError,
@@ -74,37 +79,20 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
         debugLogging: false,
       );
 
-      if (available) {
-        var locales = await _speechToText.locales();
-        if (mounted) {
-          setState(() {
-            _isSpeechInitialized = true;
-            _availableLocales = locales;
-            // Prefer Indian English or Hindi if available
-            var preferred = locales.firstWhere(
-              (l) => l.localeId == 'en_IN' || l.localeId == 'hi_IN',
-              orElse: () => locales.isNotEmpty ? locales.first : LocaleName('en_US', 'English'),
-            );
-            _selectedLocaleId = preferred.localeId;
-          });
-          // Auto start listening immediately when entering this screen
-          _startListening();
+      if (mounted) {
+        setState(() {
+          _isSpeechInitialized = available;
+        });
+        if (available) {
+          _startVoiceCapture();
         }
-      } else {
+      }
+    } catch (_) {
+      if (mounted) {
         setState(() {
           _isSpeechInitialized = false;
-          _statusMessage = "Speech recognition unavailable. Type manually below.";
         });
       }
-    } catch (e) {
-      setState(() {
-        _isSpeechInitialized = false;
-        if (e.toString().contains("MissingPluginException")) {
-          _statusMessage = "Please rebuild/restart the app to connect speech engine";
-        } else {
-          _statusMessage = "Speech service: $e";
-        }
-      });
     }
   }
 
@@ -113,16 +101,13 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
     if (status == 'listening') {
       setState(() {
         _isListening = true;
-        _statusMessage = "Listening... Speak now";
+        _statusMessage = "Listening... Speak your question clearly";
       });
       _pulseController.forward();
     } else if (status == 'notListening' || status == 'done') {
-      setState(() {
-        _isListening = false;
-        _statusMessage = "Listening stopped. Tap mic to speak again";
-      });
-      _pulseController.stop();
-      _pulseController.reset();
+      if (_isListening) {
+        _stopVoiceCapture();
+      }
     }
   }
 
@@ -130,32 +115,68 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
     if (!mounted) return;
     setState(() {
       _isListening = false;
-      _statusMessage = "Error: ${error.errorMsg}";
+      _statusMessage = "Tap mic to speak again";
     });
     _pulseController.stop();
-    _pulseController.reset();
+    _stopTimer();
   }
 
-  void _startListening() async {
-    if (!_isSpeechInitialized) {
-      await _initSpeech();
-    }
+  void _startTimer() {
+    _recordingSeconds = 0;
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _recordingSeconds++;
+        });
+      }
+    });
+  }
 
-    if (!_isSpeechInitialized) {
-      Fluttertoast.showToast(msg: "Microphone / Speech recognition not available");
-      return;
-    }
+  void _stopTimer() {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+  }
+
+  String _formatDuration(int seconds) {
+    int m = seconds ~/ 60;
+    int s = seconds % 60;
+    return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
+  }
+
+  void _startVoiceCapture() async {
+    final whisper = ref.read(whisperServiceProvider);
 
     try {
+      // 1. Start Audio Recorder file capture
+      if (await whisper.hasPermission()) {
+        _currentAudioPath = await whisper.startRecording();
+      }
+
+      // 2. Start Live Recognition Preview
+      if (!_isSpeechInitialized) {
+        _isSpeechInitialized = await _speechToText.initialize();
+      }
+
       setState(() {
         _isListening = true;
-        _statusMessage = "Listening... Speak your question";
+        _statusMessage = "Listening... Speak now";
       });
       _pulseController.forward();
+      _startTimer();
 
       await _speechToText.listen(
-        onResult: _onSpeechResult,
-        localeId: _selectedLocaleId,
+        onResult: (result) {
+          if (mounted) {
+            setState(() {
+              _textController.text = result.recognizedWords;
+              _textController.selection = TextSelection.fromPosition(
+                TextPosition(offset: _textController.text.length),
+              );
+            });
+          }
+        },
+        localeId: _selectedLanguage,
         listenMode: ListenMode.dictation,
         onSoundLevelChange: (level) {
           if (mounted) {
@@ -168,47 +189,118 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
         partialResults: true,
       );
     } catch (e) {
-      setState(() {
-        _isListening = false;
-        _statusMessage = "Failed to start listening: $e";
-      });
+      if (mounted) {
+        setState(() {
+          _isListening = false;
+          _statusMessage = "Tap mic to speak";
+        });
+        _stopTimer();
+      }
     }
   }
 
-  void _stopListening() async {
-    try {
-      await _speechToText.stop();
-    } catch (_) {}
+  void _stopVoiceCapture() async {
+    _stopTimer();
+    final whisper = ref.read(whisperServiceProvider);
+
     if (mounted) {
       setState(() {
         _isListening = false;
-        _statusMessage = "Tap mic to resume speaking";
+        _isTranscribing = true;
+        _statusMessage = "Processing transcription...";
       });
       _pulseController.stop();
-      _pulseController.reset();
+    }
+
+    try {
+      await _speechToText.stop();
+    } catch (_) {}
+
+    try {
+      final audioPath = await whisper.stopRecording() ?? _currentAudioPath;
+      if (audioPath != null && _textController.text.trim().isEmpty) {
+        // Transcribe with Whisper service if text is empty
+        final text = await whisper.transcribe(
+          filePath: audioPath,
+          language: _selectedLanguage.startsWith('hi') ? 'hi' : 'en',
+        );
+        if (text.isNotEmpty && mounted) {
+          setState(() {
+            _textController.text = text;
+          });
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _isTranscribing = false;
+        _statusMessage = _textController.text.trim().isNotEmpty
+            ? "Transcription ready. Edit or submit below."
+            : "Tap mic to speak again.";
+      });
     }
   }
 
-  void _toggleListening() {
+  void _toggleVoiceCapture() {
     if (_isListening) {
-      _stopListening();
+      _stopVoiceCapture();
     } else {
-      _startListening();
+      _startVoiceCapture();
     }
   }
 
-  void _onSpeechResult(SpeechRecognitionResult result) {
-    if (!mounted) return;
+  Future<void> _submitQuestion() async {
+    final String question = _textController.text.trim();
+    if (question.isEmpty) {
+      Fluttertoast.showToast(msg: "Please speak or type your question first");
+      return;
+    }
+
+    if (_isListening) {
+      _stopVoiceCapture();
+    }
+
     setState(() {
-      _textController.text = result.recognizedWords;
-      _textController.selection = TextSelection.fromPosition(
-        TextPosition(offset: _textController.text.length),
-      );
+      _isSubmitting = true;
     });
+
+    try {
+      final formData = FormData.fromMap({
+        'question': question,
+      });
+
+      final response = await ref.read(dioProvider).post(
+        ApiClient.submitEmployeeQuestion,
+        data: formData,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+
+        String msg = "Question submitted successfully!";
+        if (response.data is Map<String, dynamic> &&
+            response.data['message'] != null) {
+          msg = response.data['message'].toString();
+        }
+        Fluttertoast.showToast(msg: msg);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        Fluttertoast.showToast(msg: "Failed to submit: $e");
+      }
+    }
   }
 
   @override
   void dispose() {
+    _stopTimer();
     _pulseController.dispose();
     _waveController.dispose();
     _textController.dispose();
@@ -218,109 +310,28 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
     super.dispose();
   }
 
-  void _submitQuestion() async {
-    String question = _textController.text.trim();
-    if (question.isEmpty) {
-      Fluttertoast.showToast(msg: "Please speak or write your question first");
-      return;
-    }
-
-    if (_isListening) {
-      _stopListening();
-    }
-
-    showLoaderDialog(context);
-    try {
-      var formData = FormData.fromMap({
-        'question': question,
-      });
-
-      var response = await ref.read(dioProvider).post(
-        ApiClient.submitEmployeeQuestion,
-        data: formData,
-      );
-
-      hideLoaderDialog(context);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        String msg = (response.data is Map && response.data['message'] != null)
-            ? "${response.data['message']}"
-            : "Question submitted successfully!";
-        Fluttertoast.showToast(msg: msg);
-        _textController.clear();
-        if (mounted) {
-          Navigator.pop(context);
-        }
-      } else {
-        String msg = (response.data is Map && response.data['message'] != null)
-            ? "${response.data['message']}"
-            : "Failed to submit question";
-        Fluttertoast.showToast(msg: msg);
-      }
-    } catch (e) {
-      hideLoaderDialog(context);
-      if (e is DioException) {
-        String err = (e.response?.data is Map && e.response?.data['message'] != null)
-            ? "${e.response?.data['message']}"
-            : (e.message ?? "Error submitting question");
-        Fluttertoast.showToast(msg: err);
-      } else {
-        Fluttertoast.showToast(msg: "Error: $e");
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
-        title: const Text("Voice Question / Assistant"),
+        title: const Text(
+          "Voice Question",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         backgroundColor: primaryColorDark,
         elevation: 0,
         actions: [
-          if (_availableLocales.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: PopupMenuButton<String>(
-                icon: const Icon(Icons.language_rounded, color: Colors.white),
-                tooltip: "Select Language",
-                onSelected: (String localeId) {
-                  setState(() {
-                    _selectedLocaleId = localeId;
-                  });
-                  Fluttertoast.showToast(msg: "Language changed");
-                },
-                itemBuilder: (context) {
-                  return _availableLocales.map((locale) {
-                    return PopupMenuItem<String>(
-                      value: locale.localeId,
-                      child: Row(
-                        children: [
-                          Icon(
-                            _selectedLocaleId == locale.localeId
-                                ? Icons.check_circle
-                                : Icons.radio_button_unchecked,
-                            color: _selectedLocaleId == locale.localeId ? primaryColorDark : Colors.grey,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              locale.name,
-                              style: TextStyle(
-                                fontWeight: _selectedLocaleId == locale.localeId
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList();
-                },
-              ),
+          if (_textController.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              tooltip: "Clear Text",
+              onPressed: () {
+                setState(() {
+                  _textController.clear();
+                  _statusMessage = "Tap mic to speak";
+                });
+              },
             ),
         ],
       ),
@@ -330,118 +341,171 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Header description card
+              // Language Selector Pills
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      primaryColorDark.withOpacity(0.08),
-                      primaryColor.withOpacity(0.04),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: primaryColorDark.withOpacity(0.15)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: primaryColorDark.withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.mic_none_rounded, color: primaryColorDark, size: 26),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Speech-to-Text Question",
-                            style: TextStyle(
-                              fontSize: Adaptive.sp(13.5),
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            "Tap the mic button and speak clearly. Your voice will automatically be converted to text.",
-                            style: TextStyle(
-                              fontSize: Adaptive.sp(11),
-                              color: Colors.grey.shade700,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              // Animated Mic Visualizer
-              _buildAnimatedMicSection(),
-
-              const SizedBox(height: 14),
-
-              // Status Pill
-              Container(
-                constraints: BoxConstraints(maxWidth: Adaptive.w(88)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _isListening ? Colors.red.shade50 : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _isListening ? Colors.red.shade200 : Colors.grey.shade300,
-                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _isListening ? Colors.red : Colors.grey,
+                    const Icon(Icons.translate_rounded,
+                        size: 18, color: primaryColorDark),
+                    const SizedBox(width: 8),
+                    _buildLanguageChip("Hindi (हिंदी)", "hi_IN"),
+                    const SizedBox(width: 6),
+                    _buildLanguageChip("English (EN)", "en_IN"),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Animated Mic Hero Section
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Outer Pulsing Ripple Rings
+                  if (_isListening) ...[
+                    ScaleTransition(
+                      scale: _pulseAnimation,
+                      child: Container(
+                        width: 170,
+                        height: 170,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: primaryColor.withOpacity(0.12),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        _statusMessage,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: Adaptive.sp(11.5),
-                          fontWeight: FontWeight.w600,
-                          color: _isListening ? Colors.red.shade700 : Colors.grey.shade700,
+                    ScaleTransition(
+                      scale: Tween<double>(begin: 1.0, end: 1.45).animate(
+                        CurvedAnimation(
+                            parent: _pulseController, curve: Curves.easeOut),
+                      ),
+                      child: Container(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: primaryColor.withOpacity(0.08),
                         ),
                       ),
                     ),
                   ],
+
+                  // Core Mic Button
+                  GestureDetector(
+                    onTap: _toggleVoiceCapture,
+                    child: Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: _isListening
+                              ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
+                              : [primaryColor, primaryColorDark],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (_isListening ? Colors.red : primaryColor)
+                                .withOpacity(0.35),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Icon(
+                          _isListening ? Icons.stop_rounded : Icons.mic_rounded,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              // Recording Duration / Status
+              if (_isListening)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDuration(_recordingSeconds),
+                      style: TextStyle(
+                        fontSize: Adaptive.sp(14),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 6),
+
+              // Status message
+              Text(
+                _statusMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: Adaptive.sp(11.5),
+                  fontWeight: FontWeight.w600,
+                  color: _isListening
+                      ? primaryColorDark
+                      : Colors.blueGrey.shade600,
                 ),
               ),
-
-              // Animated Sound Waves when recording
-              if (_isListening) ...[
-                const SizedBox(height: 16),
-                _buildSoundWaves(),
-              ],
-
               const SizedBox(height: 24),
 
-              // Transcribed text box
+              // Audio Wave Animation Bar when listening
+              if (_isListening)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(12, (index) {
+                      final heights = [10.0, 18.0, 28.0, 22.0, 36.0, 24.0, 16.0, 32.0, 20.0, 12.0, 26.0, 14.0];
+                      return AnimatedContainer(
+                        duration: Duration(milliseconds: 200 + (index * 30)),
+                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                        width: 4,
+                        height: (_soundLevel > 0)
+                            ? (heights[index] * (_soundLevel / 5)).clamp(6.0, 42.0)
+                            : heights[index] * 0.5,
+                        decoration: BoxDecoration(
+                          color: primaryColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+
+              // Transcription Result Box
               Container(
+                width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -452,196 +516,103 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
                       offset: const Offset(0, 4),
                     ),
                   ],
-                  border: Border.all(
-                    color: _isListening ? primaryColorDark.withOpacity(0.5) : Colors.grey.shade200,
-                    width: _isListening ? 1.5 : 1,
-                  ),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
+                padding: const EdgeInsets.all(16),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.edit_note_rounded, color: primaryColorDark, size: 20),
-                              const SizedBox(width: 6),
-                              Text(
-                                "Recognized Question",
-                                style: TextStyle(
-                                  fontSize: Adaptive.sp(12.5),
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Your Question:",
+                          style: TextStyle(
+                            fontSize: Adaptive.sp(12),
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF0F172A),
                           ),
-                          Row(
-                            children: [
-                              if (_textController.text.isNotEmpty)
-                                IconButton(
-                                  tooltip: "Clear Text",
-                                  icon: const Icon(Icons.clear_rounded, size: 20, color: Colors.grey),
-                                  onPressed: () {
-                                    setState(() {
-                                      _textController.clear();
-                                    });
-                                  },
-                                ),
-                            ],
+                        ),
+                        if (_isTranscribing)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: primaryColorDark,
+                            ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: TextField(
-                        controller: _textController,
-                        maxLines: 6,
-                        minLines: 4,
-                        style: TextStyle(fontSize: Adaptive.sp(13), color: Colors.black87, height: 1.4),
-                        decoration: InputDecoration(
-                          hintText: _isListening
-                              ? "Listening... spoken words will appear here in real time..."
-                              : "Tap the microphone above and speak, or type your question here...",
-                          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: Adaptive.sp(12)),
-                          border: InputBorder.none,
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _textController,
+                      maxLines: 4,
+                      style: TextStyle(
+                        fontSize: Adaptive.sp(13),
+                        color: const Color(0xFF1E293B),
+                        height: 1.4,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "Spoken words will appear here. You can also type or edit...",
+                        hintStyle: TextStyle(
+                          fontSize: Adaptive.sp(11.5),
+                          color: Colors.blueGrey.shade300,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.all(12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                              color: primaryColorDark, width: 2),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
 
-              const SizedBox(height: 28),
-
-              // Action Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: Colors.grey.shade400),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _textController.clear();
-                          if (_isListening) _stopListening();
-                        });
-                      },
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.black87),
-                      label: Text(
-                        "Reset",
-                        style: TextStyle(color: Colors.black87, fontSize: Adaptive.sp(13)),
-                      ),
+              // Submit Question Button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColorDark,
+                    foregroundColor: Colors.white,
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColorDark,
-                        elevation: 3,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: _submitQuestion,
-                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                      label: Text(
-                        "Submit Question",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: Adaptive.sp(13.5),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded, size: 20),
+                  label: Text(
+                    _isSubmitting ? "Submitting..." : "Submit Question",
+                    style: TextStyle(
+                      fontSize: Adaptive.sp(14),
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnimatedMicSection() {
-    return GestureDetector(
-      onTap: _toggleListening,
-      child: Center(
-        child: SizedBox(
-          width: 160,
-          height: 160,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Outer wave 2
-              if (_isListening)
-                AnimatedBuilder(
-                  animation: _pulseAnimation,
-                  builder: (context, child) {
-                    return Container(
-                      width: 150 * _pulseAnimation.value,
-                      height: 150 * _pulseAnimation.value,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: primaryColorDark.withOpacity((1.3 - _pulseAnimation.value).clamp(0.05, 0.2)),
-                      ),
-                    );
-                  },
-                ),
-
-              // Outer wave 1
-              if (_isListening)
-                AnimatedBuilder(
-                  animation: _pulseAnimation,
-                  builder: (context, child) {
-                    return Container(
-                      width: 120 * _pulseAnimation.value,
-                      height: 120 * _pulseAnimation.value,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: primaryColorDark.withOpacity((1.2 - _pulseAnimation.value).clamp(0.1, 0.35)),
-                      ),
-                    );
-                  },
-                ),
-
-              // Main Circular Button
-              Container(
-                width: 85,
-                height: 85,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: _isListening
-                        ? [Colors.red.shade600, Colors.redAccent.shade700]
-                        : [primaryColorDark, primaryColor],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _isListening
-                          ? Colors.red.withOpacity(0.4)
-                          : primaryColorDark.withOpacity(0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  _isListening ? Icons.stop_rounded : Icons.mic_rounded,
-                  color: Colors.white,
-                  size: 42,
+                  onPressed: _isSubmitting ? null : _submitQuestion,
                 ),
               ),
             ],
@@ -651,26 +622,36 @@ class _VoiceQuestionScreenState extends ConsumerState<VoiceQuestionScreen>
     );
   }
 
-  Widget _buildSoundWaves() {
-    return AnimatedBuilder(
-      animation: _waveController,
-      builder: (context, child) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(9, (index) {
-            double height = 8 + (24 * (((index % 3) + 1) / 3) * (_waveController.value + 0.2));
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2.5),
-              width: 3.5,
-              height: height.clamp(6.0, 32.0),
-              decoration: BoxDecoration(
-                color: primaryColorDark,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            );
-          }),
-        );
+  Widget _buildLanguageChip(String label, String localeId) {
+    final bool isSelected = _selectedLanguage == localeId;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedLanguage = localeId;
+        });
+        if (_isListening) {
+          _stopVoiceCapture();
+          Future.delayed(const Duration(milliseconds: 300), () {
+            _startVoiceCapture();
+          });
+        }
       },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryColorDark : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: Adaptive.sp(10.5),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.white : Colors.blueGrey.shade700,
+          ),
+        ),
+      ),
     );
   }
 }

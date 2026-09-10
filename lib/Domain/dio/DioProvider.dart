@@ -11,10 +11,10 @@ part 'DioProvider.g.dart';
 @riverpod
 Dio dio(DioRef ref) {
   return Dio(BaseOptions(
-      baseUrl: ApiClient.baseUrl,
+      baseUrl: ApiClient.testBaseUrl,
       headers: {
         "Authorization": ref.watch(sharedUtilityProvider).getToken(),
-      },
+                    },
       connectTimeout: const Duration(minutes: 30),
       receiveTimeout: const Duration(minutes: 30),
       sendTimeout: const Duration(minutes: 30)))
@@ -59,7 +59,7 @@ class ApiClient {
   static const baseUrl = "https://apnagodam.com/";
   static const testBaseUrl = "https://demoaws.apnagodam.com/";
 
-  static String getFullUrl(String path, {bool useTestBase = false}) {
+  static String getFullUrl(String path, {bool useTestBase = true}) {
     return '${useTestBase ? testBaseUrl : baseUrl}$path';
   }
 

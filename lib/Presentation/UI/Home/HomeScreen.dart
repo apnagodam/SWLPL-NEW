@@ -1731,19 +1731,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                 "1";
                                             var currentOutStatus =
                                                 'CCTV Pending';
-                                            if (isQualityAssayer) {
-                                              if (distinctList[index]
-                                                          .sQualityReport ==
-                                                      null &&
-                                                  distinctList[index]
-                                                          .sKParchi !=
-                                                      null) {
-                                                currentInStatus =
-                                                    "Add Second Quality Report";
-                                              } else {
-                                                currentInStatus = "Gatepass Recommend Approval Pending ";
-                                              }
-                                            } else if (distinctList[index]
+                                            if (distinctList[index]
                                                     .truckbook ==
                                                 null) {
                                               currentInStatus =
@@ -1798,8 +1786,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                               currentInStatus =
                                                   "Add Second Kanta Parchi";
                                             } else if (distinctList[index]
-                                                    .sQualityReport ==
-                                                null) {
+                                                        .sQualityReport ==
+                                                    null &&
+                                                distinctList[index].sendToLab ==
+                                                    null) {
                                               a = DateTime.parse(
                                                   distinctList[index]
                                                           .sKParchiDate ??
@@ -1847,40 +1837,59 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                             ;
                                             if (distinctList[index].truckbook ==
                                                 null) {
+                                              a = DateTime.parse(
+                                                  distinctList[index]
+                                                          .createdAt ??
+                                                      "");
                                               currentOutStatus =
                                                   "Add Truck Book";
                                             } else if (distinctList[index]
                                                     .labourbook ==
                                                 null) {
+                                              a = DateTime.parse(
+                                                  distinctList[index]
+                                                          .truckbookDate ??
+                                                      "");
                                               currentOutStatus = "Add Labour";
                                             } else if (distinctList[index]
                                                     .firstKantaParchi ==
                                                 null) {
+                                              a = DateTime.parse(
+                                                  distinctList[index]
+                                                          .labourbookDate ??
+                                                      "");
                                               currentOutStatus =
                                                   "Add First Kanta Parchi";
                                             } else if (distinctList[index]
-                                                    .firstQuality ==
-                                                null) {
-                                              currentOutStatus =
-                                                  "Add First Quality";
-                                            } else if (distinctList[index]
-                                                    .fQTagging ==
-                                                null) {
-                                              currentOutStatus =
-                                                  "Quality Approval Pending";
-                                            } else if (distinctList[index]
-                                                    .sKParchi ==
-                                                null) {
-                                              currentOutStatus =
-                                                  "Add Second Kanta Parchi";
-                                            } else if (distinctList[index]
-                                                    .sQualityReport ==
-                                                null) {
+                                                        .sQualityReport ==
+                                                    null &&
+                                                distinctList[index]
+                                                        .sendToLab ==
+                                                    null) {
+                                              a = DateTime.parse(distinctList[
+                                                          index]
+                                                      .firstKantaParchiDate ??
+                                                  "");
                                               currentOutStatus =
                                                   "Add Second Quality Report";
                                             } else if (distinctList[index]
+                                                    .sKParchi ==
+                                                null) {
+                                              a = DateTime.parse(
+                                                  distinctList[index]
+                                                          .sQualityDate ??
+                                                      distinctList[index]
+                                                          .firstKantaParchiDate ??
+                                                      "");
+                                              currentOutStatus =
+                                                  "Add Second Kanta Parchi";
+                                            } else if (distinctList[index]
                                                     .ivrReport ==
                                                 null) {
+                                              a = DateTime.parse(
+                                                  distinctList[index]
+                                                          .sKParchiDate ??
+                                                      "");
                                               if (ref
                                                       .watch(
                                                           sharedUtilityProvider)
@@ -1896,6 +1905,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                             } else if (distinctList[index]
                                                     .gatepassReport ==
                                                 null) {
+                                              a = DateTime.parse(
+                                                  distinctList[index].ivrDate ??
+                                                      "");
                                               currentOutStatus =
                                                   "Gatepass Approval Pending";
                                             } else {
@@ -2073,8 +2085,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                                                 .truckbook !=
                                                                             null) ||
                                                                     (distinctList[index]
-                                                                            .firstKantaParchi ==
-                                                                        null) ||
+                                                                                .firstKantaParchi ==
+                                                                            null &&
+                                                                        distinctList[index]
+                                                                                .labourbook !=
+                                                                            null) ||
                                                                     (distinctList[index]
                                                                                 .firstQuality ==
                                                                             null &&
@@ -2087,11 +2102,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                                             null) ||
                                                                     (distinctList[index].sQualityReport ==
                                                                             null &&
+                                                                        distinctList[index].sendToLab ==
+                                                                            null &&
                                                                         isQualityAssayer &&
                                                                         distinctList[index].inOut ==
-                                                                            "IN") ||
+                                                                            "IN" &&
+                                                                        distinctList[index].sKParchi !=
+                                                                            null) ||
                                                                     (distinctList[index].ivrReport ==
                                                                             null &&
+                                                                        (distinctList[index].sQualityReport !=
+                                                                                null ||
+                                                                            distinctList[index].sendToLab !=
+                                                                                null) &&
                                                                         ref.watch(sharedUtilityProvider).getUser()?.terminal ==
                                                                             null)
                                                                 ? Column(
@@ -2146,6 +2169,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                                             });
                                                                           } else if (distinctList[index].fQTagging ==
                                                                               null) {
+                                                                            return;
                                                                           } // SECOND KANTA
                                                                           else if (distinctList[index].sKParchi ==
                                                                               null) {
@@ -2159,17 +2183,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                                               },
                                                                             );
                                                                           } else if (distinctList[index].sQualityReport ==
-                                                                              null) {
-                                                                            context.goNamed(
-                                                                              's_quality_report',
-                                                                              extra: {
-                                                                                'case_id': distinctList[index].caseId ?? "",
-                                                                                'customer_name': distinctList[index].custFname ?? "",
-                                                                                'avg_weight': "${distinctList[index].sKPAvgWeight ?? 0}",
-                                                                                "in_out": "${distinctList[index].inOut}",
-                                                                                "commodity_quality": "${distinctList[index].commodityQuality ?? 0}",
-                                                                              },
-                                                                            );
+                                                                                  null &&
+                                                                              distinctList[index].sendToLab ==
+                                                                                  null) {
+                                                                            if (isQualityAssayer) {
+                                                                              context.goNamed(
+                                                                                's_quality_report',
+                                                                                extra: {
+                                                                                  'case_id': distinctList[index].caseId ?? "",
+                                                                                  'customer_name': distinctList[index].custFname ?? "",
+                                                                                  'avg_weight': "${distinctList[index].sKPAvgWeight ?? 0}",
+                                                                                  "in_out": "${distinctList[index].inOut}",
+                                                                                  "commodity_quality": "${distinctList[index].commodityQuality ?? 0}",
+                                                                                },
+                                                                              );
+                                                                            } else {
+                                                                              Fluttertoast.showToast(
+                                                                                msg: "Second Quality Pending",
+                                                                              );
+                                                                              return;
+                                                                            }
                                                                           } else if (distinctList[index].ivrReport ==
                                                                               null) {
                                                                             context.goNamed(
@@ -2771,24 +2804,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                             distinctList[index]
                                                                             .truckbook ==
                                                                         null ||
-                                                                    distinctList[index]
-                                                                            .labourbook ==
-                                                                        null ||
+                                                                    (distinctList[index].labourbook ==
+                                                                            null &&
+                                                                        distinctList[index]
+                                                                                .truckbook !=
+                                                                            null) ||
                                                                     distinctList[
                                                                                 index]
                                                                             .firstKantaParchi ==
                                                                         null ||
-                                                                    distinctList[
-                                                                                index]
-                                                                            .sKParchi ==
-                                                                        null ||
+                                                                    (distinctList[index].sQualityReport ==
+                                                                            null &&
+                                                                        distinctList[index].sendToLab ==
+                                                                            null &&
+                                                                        distinctList[index].firstKantaParchi !=
+                                                                            null) ||
+                                                                    (distinctList[index].sKParchi ==
+                                                                            null &&
+                                                                        (distinctList[index].sQualityReport !=
+                                                                                null ||
+                                                                            distinctList[index].sendToLab !=
+                                                                                null)) ||
                                                                     (distinctList[index].ivrReport ==
                                                                             null &&
                                                                         ref.watch(sharedUtilityProvider).getUser()?.terminal ==
-                                                                            null) ||
-                                                                    (distinctList[index]
-                                                                            .sQualityReport ==
-                                                                        null)
+                                                                            null &&
+                                                                        distinctList[index].sKParchi !=
+                                                                            null)
                                                                 ? AnimatedButton(
                                                                     height: 50,
                                                                     color:
@@ -2840,100 +2882,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                                               "in_out": "${distinctList[index].inOut}"
                                                                             });
                                                                       } else if (distinctList[index]
-                                                                              .firstQuality ==
-                                                                          null) {
-                                                                        context
-                                                                            .goNamed(
-                                                                          'f_quality_report',
-                                                                          extra: {
-                                                                            'case_id':
-                                                                                distinctList[index].caseId ?? "",
-                                                                            'customer_name':
-                                                                                distinctList[index].custFname ?? "",
-                                                                            "in_out":
-                                                                                "${distinctList[index].inOut}"
-                                                                          },
-                                                                        );
-                                                                      } else if (distinctList[index]
-                                                                              .fQTagging ==
-                                                                          null) {
-                                                                        return;
-                                                                      } else if (distinctList[index]
-                                                                              .sKParchi ==
-                                                                          null) {
-                                                                        context
-                                                                            .goNamed(
-                                                                          's_kanta_parchi',
-                                                                          extra: {
-                                                                            'case_id':
-                                                                                distinctList[index].caseId ?? "",
-                                                                            'customer_name':
-                                                                                distinctList[index].custFname ?? "",
-                                                                            'terminal_id':
-                                                                                "${distinctList[index].terminalId ?? 0}",
-                                                                            "in_out":
-                                                                                "${distinctList[index].inOut}"
-                                                                          },
-                                                                        );
-                                                                      } else if (distinctList[index].sQualityReport ==
+                                                                                  .sQualityReport ==
                                                                               null &&
-                                                                          distinctList[index].inOut ==
-                                                                              "IN") {
-                                                                        if (isQualityAssayer) {
-                                                                          context
-                                                                              .goNamed(
-                                                                            's_quality_report',
-                                                                            extra: {
-                                                                              'case_id': distinctList[index].caseId ?? "",
-                                                                              'customer_name': distinctList[index].custFname ?? "",
-                                                                              'avg_weight': "${distinctList[index].sKPAvgWeight ?? 0}",
-                                                                              "in_out": "${distinctList[index].inOut}",
-                                                                              "commodity_quality": "${distinctList[index].commodityQuality ?? 0}",
-                                                                            },
-                                                                          );
-                                                                        } else {
-                                                                          Fluttertoast
-                                                                              .showToast(
-                                                                            msg:
-                                                                                "Second Quality Pending",
-                                                                          );
-
-                                                                          return;
-                                                                        }
-                                                                      } else if (distinctList[index]
-                                                                              .sKParchi ==
-                                                                          null) {
-                                                                        context
-                                                                            .goNamed(
-                                                                          's_kanta_parchi',
-                                                                          extra: {
-                                                                            'case_id':
-                                                                                distinctList[index].caseId ?? "",
-                                                                            'customer_name':
-                                                                                distinctList[index].custFname ?? "",
-                                                                            'terminal_id':
-                                                                                "${distinctList[index].terminalId ?? 0}",
-                                                                            "in_out":
-                                                                                "${distinctList[index].inOut}"
-                                                                          },
-                                                                        );
-                                                                      } else if (distinctList[index]
-                                                                              .sQualityReport ==
-                                                                          null) {
+                                                                          distinctList[index]
+                                                                                  .sendToLab ==
+                                                                              null) {
                                                                         context
                                                                             .goNamed(
                                                                           's_quality_report',
                                                                           extra: {
+                                                                            'case_id': distinctList[index].caseId ?? "",
+                                                                            'customer_name': distinctList[index].custFname ?? "",
+                                                                            'avg_weight': "${distinctList[index].sKPAvgWeight ?? 0}",
+                                                                            "in_out": "${distinctList[index].inOut}",
+                                                                            "commodity_quality": "${distinctList[index].commodityQuality ?? 0}",
+                                                                          },
+                                                                        );
+                                                                      } else if (distinctList[index]
+                                                                              .sKParchi ==
+                                                                          null) {
+                                                                        context
+                                                                            .goNamed(
+                                                                          's_kanta_parchi',
+                                                                          extra: {
                                                                             'case_id':
                                                                                 distinctList[index].caseId ?? "",
                                                                             'customer_name':
                                                                                 distinctList[index].custFname ?? "",
-                                                                            'avg_weight':
-                                                                                "${distinctList[index].sKPAvgWeight ?? 0}",
+                                                                            'terminal_id':
+                                                                                "${distinctList[index].terminalId ?? 0}",
                                                                             "in_out":
-                                                                                "${distinctList[index].inOut}",
-                                                                            "commodity_quality":
-                                                                                "${distinctList[index].commodityQuality ?? 0}",
+                                                                                "${distinctList[index].inOut}"
                                                                           },
                                                                         );
                                                                       } else if (distinctList[index]
@@ -3054,227 +3033,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                                                     ),
                                                                   )
                                                                 : null,
-                                                            const SizedBox(
-                                                              height: 10,
-                                                            ),
-                                                            Visibility(
-                                                                visible: (distinctList[index].sendToLab ==
-                                                                            null &&
-                                                                        distinctList[index].sQualityReport ==
-                                                                            null) &&
-                                                                    distinctList[index]
-                                                                            .firstKantaParchi !=
-                                                                        null,
-                                                                child:
-                                                                    AnimatedButton(
-                                                                  height: 50,
-                                                                  color:
-                                                                      primaryColorDark,
-                                                                  width: MediaQuery.of(
-                                                                              context)
-                                                                          .size
-                                                                          .width /
-                                                                      1.2,
-                                                                  isOutline:
-                                                                      true,
-                                                                  isMultiColor:
-                                                                      true,
-                                                                  colors: const [
-                                                                    primaryColorDark,
-                                                                    primaryColorDark
-                                                                  ],
-                                                                  borderWidth:
-                                                                      1,
-                                                                  onTap:
-                                                                      () async {
-                                                                    if (!isQualityAssayer) {
-                                                                      Fluttertoast
-                                                                          .showToast(
-                                                                        msg:
-                                                                            "Second Quality Pending",
-                                                                      );
-
-                                                                      return;
-                                                                    }
-
-                                                                    showBarModalBottomSheet(
-                                                                        context:
-                                                                            context,
-                                                                        builder: (context) =>
-                                                                            Padding(
-                                                                              padding: const Pad(all: 10),
-                                                                              child: ColumnSuper(children: [
-                                                                                Text(
-                                                                                  'Submit Lab Report',
-                                                                                  style: TextStyle(fontWeight: FontWeight.bold, color: primaryColorDark, fontSize: Adaptive.sp(18)),
-                                                                                ),
-                                                                                SizedBox(
-                                                                                  height: 250,
-                                                                                  child: InkWell(
-                                                                                    child: DottedBorder(
-                                                                                      color: primaryColorDark,
-                                                                                      borderType: BorderType.RRect,
-                                                                                      padding: const Pad(all: 10),
-                                                                                      radius: const Radius.circular(5),
-                                                                                      child: Center(
-                                                                                        child: ref.watch(labReportImageProvider) == null
-                                                                                            ? ColumnSuper(
-                                                                                                children: const [
-                                                                                                  Icon(
-                                                                                                    Icons.file_upload_rounded,
-                                                                                                    color: primaryColorDark,
-                                                                                                  ),
-                                                                                                  Text(
-                                                                                                    'Capture Lab Report Image',
-                                                                                                    style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold),
-                                                                                                  )
-                                                                                                ],
-                                                                                              )
-                                                                                            : InkWell(
-                                                                                                onTap: () async {
-                                                                                                  try {
-                                                                                                    imagePicker.pickImage(source: ImageSource.camera, maxWidth: 1600, maxHeight: 1800, imageQuality: 25).then((value) async {
-                                                                                                      if (value != null) {
-                                                                                                        var u8int = await value.readAsBytes();
-                                                                                                        createStampedImage(u8int, ref).then((value) {
-                                                                                                          ref.watch(labReportImageProvider.notifier).state = value;
-                                                                                                        });
-                                                                                                      }
-                                                                                                    });
-                                                                                                  } catch (e, s) {
-                                                                                                    debugPrintStack(
-                                                                                                      stackTrace: s,
-                                                                                                    );
-                                                                                                  }
-                                                                                                },
-                                                                                                child: ZoomOverlay(
-                                                                                                  modalBarrierColor: Colors.black12,
-                                                                                                  // Optional
-                                                                                                  minScale: 0.5,
-                                                                                                  // Optional
-                                                                                                  maxScale: 3.0,
-                                                                                                  // Optional
-                                                                                                  animationCurve: Curves.fastOutSlowIn,
-                                                                                                  // Defaults to fastOutSlowIn which mimics IOS instagram behavior
-                                                                                                  animationDuration: const Duration(milliseconds: 300),
-                                                                                                  // Defaults to 100 Milliseconds. Recommended duration is 300 milliseconds for Curves.fastOutSlowIn
-                                                                                                  twoTouchOnly: true,
-                                                                                                  // Defaults to false
-                                                                                                  onScaleStart: () {},
-                                                                                                  // optional VoidCallback
-                                                                                                  onScaleStop: () {},
-                                                                                                  // optional VoidCallback
-                                                                                                  child: Image.memory(
-                                                                                                    ref.watch(labReportImageProvider) ?? Uint8List(0),
-                                                                                                    fit: BoxFit.contain,
-                                                                                                    height: 250,
-                                                                                                  ),
-                                                                                                ),
-                                                                                              ),
-                                                                                      ),
-                                                                                    ),
-                                                                                    onTap: () async {
-                                                                                      // showLoaderDialog(context);
-                                                                                      try {
-                                                                                        imagePicker.pickImage(source: ImageSource.camera, maxWidth: 1800, maxHeight: 2000, imageQuality: 25).then((value) async {
-                                                                                          if (value != null) {
-                                                                                            var u8int = await value.readAsBytes();
-                                                                                            createStampedImage(u8int, ref).then((value) {
-                                                                                              ref.watch(labReportImageProvider.notifier).state = value;
-                                                                                            });
-                                                                                          }
-                                                                                        });
-                                                                                      } catch (e, s) {
-                                                                                        debugPrintStack(
-                                                                                          stackTrace: s,
-                                                                                        );
-                                                                                      }
-                                                                                    },
-                                                                                  ),
-                                                                                ),
-                                                                                const SizedBox(
-                                                                                  height: 10,
-                                                                                ),
-                                                                                RowSuper(fitHorizontally: true, children: [
-                                                                                  Padding(
-                                                                                    padding: const Pad(all: 10),
-                                                                                    child: AnimatedButton(
-                                                                                      height: 50,
-                                                                                      color: primaryColorDark,
-                                                                                      isOutline: true,
-                                                                                      isMultiColor: true,
-                                                                                      colors: const [
-                                                                                        primaryColorDark,
-                                                                                        primaryColorDark
-                                                                                      ],
-                                                                                      borderWidth: 1,
-                                                                                      onTap: () async {
-                                                                                        if (ref.watch(labReportImageProvider) == null) {
-                                                                                          Fluttertoast.showToast(msg: 'Please select lab report image');
-                                                                                        } else {
-                                                                                          ref.watch(uploadSecondQualityReportProvider(data: Secondqualityuploadmodel(caseId: distinctList[index].caseId, sendToLab: "1", sendToReportFile: base64Encode(ref.watch(labReportImageProvider) ?? Uint8List(0)), inOut: distinctList[index].inOut, extraClaim: "0")).future).then((value) {
-                                                                                            if (value['status'].toString() == "1") {
-                                                                                              ref.invalidate(caseIdProvider);
-                                                                                              Navigator.pop(context);
-                                                                                            }
-                                                                                            Fluttertoast.showToast(msg: value['message'].toString());
-                                                                                          });
-                                                                                        }
-                                                                                      },
-                                                                                      child: Text(
-                                                                                        'Yes',
-                                                                                        textAlign: TextAlign.center,
-                                                                                        style: TextStyle(color: Colors.white, fontSize: Adaptive.sp(14), fontWeight: FontWeight.w800),
-                                                                                      ),
-                                                                                    ),
-                                                                                  ),
-                                                                                  const SizedBox(
-                                                                                    width: 10,
-                                                                                  ),
-                                                                                  Padding(
-                                                                                    padding: const Pad(all: 10),
-                                                                                    child: AnimatedButton(
-                                                                                      height: 50,
-                                                                                      color: primaryColorDark,
-                                                                                      isOutline: true,
-                                                                                      isMultiColor: true,
-                                                                                      colors: const [
-                                                                                        primaryColorDark,
-                                                                                        primaryColorDark
-                                                                                      ],
-                                                                                      borderWidth: 1,
-                                                                                      onTap: () async {
-                                                                                        Navigator.pop(context);
-                                                                                      },
-                                                                                      child: Text(
-                                                                                        'No',
-                                                                                        textAlign: TextAlign.center,
-                                                                                        style: TextStyle(color: Colors.white, fontSize: Adaptive.sp(14), fontWeight: FontWeight.w800),
-                                                                                      ),
-                                                                                    ),
-                                                                                  )
-                                                                                ]),
-                                                                                const SizedBox(
-                                                                                  height: 10,
-                                                                                ),
-                                                                              ]),
-                                                                            ));
-                                                                  },
-                                                                  child: Text(
-                                                                    'Submit lab report',
-                                                                    textAlign:
-                                                                        TextAlign
-                                                                            .center,
-                                                                    style: TextStyle(
-                                                                        color: Colors
-                                                                            .white,
-                                                                        fontSize:
-                                                                            Adaptive.sp(
-                                                                                14),
-                                                                        fontWeight:
-                                                                            FontWeight.w800),
-                                                                  ),
-                                                                )),
                                                           ]),
                                                     ),
                                                   );

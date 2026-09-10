@@ -148,45 +148,46 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    requestLocationPermission().then((value) {
-      if (value) {
-        ref.watch(positionStream).when(
-            data: (location) {
-              ref.watch(distanceProvider.notifier).state =
-                  Geolocator.distanceBetween(
-                          ref.watch(locationProvider)?.latitude ?? 0.0,
-                          ref.watch(locationProvider)?.longitude ?? 0.0,
-                          double.tryParse(ref
-                                      .watch(sharedUtilityProvider)
-                                      .getUser()
-                                      ?.attenLat ??
-                                  "0.0") ??
-                              0.0,
-                          double.tryParse(ref
-                                      .watch(sharedUtilityProvider)
-                                      .getUser()
-                                      ?.attenLong ??
-                                  "0.0") ??
-                              0.0)
-                      .toString();
-              ref.watch(locationProvider.notifier).state = location;
-              placemarkFromCoordinates(location.latitude, location.longitude)
-                  .then((placemarks) {
-                ref.watch(addressProvider.notifier).state =
-                    "${placemarks.first.name} ${placemarks.first.street} ${placemarks.first.locality} ${placemarks.first.administrativeArea}";
-              }).onError((e, s) {
-                if (e is SocketException || e is TimeoutException) {
-                  showErrorDialog(
-                      context, 'please check your internet connection');
-                }
-              });
-            },
-            error: (e, s) => null,
-            loading: () => null);
-      } else {
-        Geolocator.openLocationSettings();
-      }
-    });
+    final token = ref.watch(sharedUtilityProvider).getToken();
+    if (token.isNotEmpty) {
+      requestLocationPermission().then((value) {
+        if (value) {
+          ref.watch(positionStream).when(
+              data: (location) {
+                ref.watch(distanceProvider.notifier).state =
+                    Geolocator.distanceBetween(
+                            ref.watch(locationProvider)?.latitude ?? 0.0,
+                            ref.watch(locationProvider)?.longitude ?? 0.0,
+                            double.tryParse(ref
+                                        .watch(sharedUtilityProvider)
+                                        .getUser()
+                                        ?.attenLat ??
+                                    "0.0") ??
+                                0.0,
+                            double.tryParse(ref
+                                        .watch(sharedUtilityProvider)
+                                        .getUser()
+                                        ?.attenLong ??
+                                    "0.0") ??
+                                0.0)
+                        .toString();
+                ref.watch(locationProvider.notifier).state = location;
+                placemarkFromCoordinates(location.latitude, location.longitude)
+                    .then((placemarks) {
+                  ref.watch(addressProvider.notifier).state =
+                      "${placemarks.first.name} ${placemarks.first.street} ${placemarks.first.locality} ${placemarks.first.administrativeArea}";
+                }).onError((e, s) {
+                  if (e is SocketException || e is TimeoutException) {
+                    showErrorDialog(
+                        context, 'please check your internet connection');
+                  }
+                });
+              },
+              error: (e, s) => null,
+              loading: () => null);
+        }
+      });
+    }
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
@@ -213,7 +214,6 @@ isThereCurrentDialogShowing(BuildContext context) =>
 final locationStateProvider = StreamProvider<Position>((ref) async* {
   LocationSettings locationSettings = const LocationSettings(
       accuracy: LocationAccuracy.medium, distanceFilter: 0);
-  Geolocator.requestPermission();
   yield* Geolocator.getPositionStream(locationSettings: locationSettings)
       .map((position) {
     ref.watch(locationProvider.notifier).state = position;

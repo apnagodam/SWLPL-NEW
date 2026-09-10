@@ -29,15 +29,21 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>need camera to upload image</string>
+	<string>This app needs camera access to capture attendance and warehouse audit photos.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>geofencing</string>
+	<string>This app requires location access for attendance marking and geofencing verification.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs access to location when open.</string>
+	<string>This app needs access to location when open for attendance marking.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>need microphone for image picker</string>
+	<string>This app requires microphone access to record employee voice questions and responses.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This app requires speech recognition to convert spoken questions and answers into text.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>need photo library to pick image</string>
+	<string>This app needs photo library access to upload documents and audit photos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app needs permission to save attendance and report photos to your photo library.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

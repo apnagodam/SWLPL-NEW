@@ -139,6 +139,57 @@ class ProfileScreen extends ConsumerWidget {
               style: TextStyle(
                   fontSize: Adaptive.sp(15), fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 30),
+            Center(
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                ),
+                icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                label: const Text(
+                  "Request Account Deletion",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text("Delete Account"),
+                      content: const Text(
+                        "Are you sure you want to request account deletion? Your request will be submitted to company HR/Admin for processing and your employee account data will be permanently removed.",
+                      ),
+                      actions: [
+                        TextButton(
+                          child: const Text("Cancel"),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text("Confirm Request"),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "Account deletion request submitted to company admin successfully.",
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       );
