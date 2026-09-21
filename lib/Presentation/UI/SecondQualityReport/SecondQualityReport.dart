@@ -150,11 +150,11 @@ print("showCommodityQualityFields => $showCommodityQualityFields");
             const SizedBox(
               height: 10,
             ),
-            if (widget.caseId.toString().toLowerCase().contains('in'))
+            if (widget.caseId.toString().toUpperCase().startsWith('IN-'))
               ElevarmPrimaryButton.text(
                 text: 'Tap to Fetch Parameters',
                 onPressed: () {
-                  if (widget.caseId.toString().toLowerCase().contains('in')) {
+                  if (widget.caseId.toString().toUpperCase().startsWith('IN-')) {
                     ref.watch(isLoading.notifier).state = true;
                     ref
                         .watch(FetchFirstQualityDataProvider(
@@ -162,7 +162,6 @@ print("showCommodityQualityFields => $showCommodityQualityFields");
                             .future)
                         .then((value) {
                       ref.watch(isLoading.notifier).state = false;
-
                       if (value.status.toString() == "1") {
                         ref.watch(_fQualityParamsList.notifier).state =
                             value.data ?? [];
@@ -181,10 +180,10 @@ print("showCommodityQualityFields => $showCommodityQualityFields");
                 : Column(
                     children: List.generate(commodityParmsResponseList.length,
                         (index) {
-                      if (widget.caseId!
-                              .toLowerCase()
+                      if (widget.caseId
                               .toString()
-                              .contains('in') &&
+                              .toUpperCase()
+                              .startsWith('IN-') &&
                           ref.watch(_fQualityParamsList).isNotEmpty) {
                         controllerList[index].text =
                             "${ref.watch(_fQualityParamsList)[index].value}";

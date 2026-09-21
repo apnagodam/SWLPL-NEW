@@ -20,9 +20,9 @@ class CheckForLateResponse {
   });
 
   factory CheckForLateResponse.fromMap(Map<String, dynamic> json) => CheckForLateResponse(
-    askReason: json["ask_reason"],
-    status: json["status"],
-    message: json["message"],
+    askReason: json["ask_reason"] != null ? int.tryParse(json["ask_reason"].toString()) : null,
+    status: json["status"] != null ? int.tryParse(json["status"].toString()) : null,
+    message: json["message"]?.toString(),
   );
 
   Map<String, dynamic> toMap() => {

@@ -21,6 +21,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:insta_image_viewer/insta_image_viewer.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
@@ -124,39 +125,81 @@ class Dashboardpanel extends ConsumerWidget {
                                             if (finalImagePath == null) return;
 
                                             bool isClockIn = attendanceData.clockStatus.toString() != "2";
-                                            final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
-                                            final shiftTime = isClockIn ? profileData?.shiftStart : profileData?.shiftEnd;
-                                            final shiftStatus = getShiftAttendanceStatus(shiftTime, isCheckIn: isClockIn);
 
                                             Future<void> doSubmitAttendance(String purpose) async {
                                               showLoaderDialog(context);
                                               try {
-                                                // 1. Hit late reason API
-                                                try {
-                                                  await ref.read(checkForLateProvider.future);
-                                                } catch (_) {}
+                                                // Ensure location is valid
+                                                var currentLoc = ref.read(locationProvider);
+                                                if (currentLoc == null) {
+                                                  try {
+                                                    currentLoc = await Geolocator.getCurrentPosition(
+                                                        timeLimit: const Duration(seconds: 5));
+                                                    ref.read(locationProvider.notifier).state = currentLoc;
+                                                  } catch (_) {
+                                                    try {
+                                                      currentLoc = await Geolocator.getLastKnownPosition();
+                                                      if (currentLoc != null) {
+                                                        ref.read(locationProvider.notifier).state = currentLoc;
+                                                      }
+                                                    } catch (_) {}
+                                                  }
+                                                }
 
-                                                // 2. Hit attendance API
+                                                var dist = ref.read(distanceProvider);
+                                                if ((dist == null || dist.toString() == "0.0") && currentLoc != null) {
+                                                  final user = ref.read(sharedUtilityProvider).getUser();
+                                                  final attenLat = double.tryParse(user?.attenLat ?? "0.0") ?? 0.0;
+                                                  final attenLong = double.tryParse(user?.attenLong ?? "0.0") ?? 0.0;
+                                                  if (attenLat != 0.0 && attenLong != 0.0) {
+                                                    dist = Geolocator.distanceBetween(
+                                                      currentLoc.latitude,
+                                                      currentLoc.longitude,
+                                                      attenLat,
+                                                      attenLong,
+                                                    ).toString();
+                                                    ref.read(distanceProvider.notifier).state = dist;
+                                                  }
+                                                }
+
+                                                // Hit attendance API
                                                 var value = await ref.read(postAttendanceV2Provider(
                                                         userPurpose: purpose,
                                                         clockStatus: isClockIn ? "1" : "2",
-                                                        distance: ref.read(distanceProvider).toString(),
+                                                        distance: dist?.toString() ?? "0.0",
                                                         image: File(finalImagePath),
-                                                        lat: '${ref.read(locationProvider)?.latitude}',
-                                                        long: '${ref.read(locationProvider)?.longitude}')
+                                                        lat: currentLoc != null ? '${currentLoc.latitude}' : '0.0',
+                                                        long: currentLoc != null ? '${currentLoc.longitude}' : '0.0')
                                                     .future);
 
                                                 hideLoaderDialog(context);
                                                 if (value['status'].toString() == "1") {
                                                   ref.invalidate(attendanceStatusProvider);
+                                                  Fluttertoast.showToast(msg: '${value['message']}');
+                                                } else {
+                                                  showErrorDialog(context, '${value['message'] ?? "Unable to submit attendance"}');
                                                 }
-                                                Fluttertoast.showToast(msg: '${value['message']}');
                                               } catch (e) {
                                                 hideLoaderDialog(context);
+                                                showErrorDialog(context, "Attendance submission failed: $e");
                                               }
                                             }
 
-                                            if (!shiftStatus.requiresReason) {
+                                            // Check late reason from backend
+                                            showLoaderDialog(context);
+                                            CheckForLateResponse? lateCheck;
+                                            try {
+                                              ref.invalidate(checkForLateProvider);
+                                              lateCheck = await ref.read(checkForLateProvider.future);
+                                            } catch (e) {
+                                              debugPrint("Error checking lateReason: $e");
+                                            }
+                                            hideLoaderDialog(context);
+
+                                            bool shouldAskReason = lateCheck != null &&
+                                                (lateCheck.askReason == 1 || lateCheck.askReason.toString() == "1");
+
+                                            if (!shouldAskReason) {
                                               await doSubmitAttendance("");
                                             } else {
                                               TextEditingController reasonCtrl = TextEditingController();
@@ -167,7 +210,7 @@ class Dashboardpanel extends ConsumerWidget {
                                                 builder: (dialogCtx) => AlertDialog(
                                                   title: Text(isClockIn
                                                       ? "Late Checkin Reason"
-                                                      : (shiftStatus.isEarly ? "Early Checkout Reason" : "Late Checkout Reason")),
+                                                      : "Checkout Reason"),
                                                   shape: RoundedRectangleBorder(
                                                       borderRadius:
                                                           BorderRadius.circular(10)),
@@ -176,40 +219,13 @@ class Dashboardpanel extends ConsumerWidget {
                                                     crossAxisAlignment:
                                                         CrossAxisAlignment.start,
                                                     children: [
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        margin: const EdgeInsets.only(bottom: 8),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.amber.shade50,
-                                                          borderRadius: BorderRadius.circular(8),
-                                                          border: Border.all(color: Colors.amber.shade300),
-                                                        ),
-                                                        child: Row(
-                                                          children: [
-                                                            Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.amber.shade800),
-                                                            const SizedBox(width: 6),
-                                                            Expanded(
-                                                              child: Text(
-                                                                shiftStatus.label,
-                                                                style: TextStyle(
-                                                                  fontSize: Adaptive.sp(11),
-                                                                  color: Colors.amber.shade900,
-                                                                  fontWeight: FontWeight.w600,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
                                                       TextField(
                                                         controller: reasonCtrl,
                                                         maxLines: 3,
                                                         decoration: InputDecoration(
                                                           labelText: isClockIn
                                                               ? "Reason for Late Attendance *"
-                                                              : (shiftStatus.isEarly
-                                                                  ? "Reason for Early Checkout *"
-                                                                  : "Reason for Late Checkout *"),
+                                                              : "Reason for Checkout *",
                                                           hintText:
                                                               "Enter reason here...",
                                                           border:
@@ -229,12 +245,13 @@ class Dashboardpanel extends ConsumerWidget {
                                                           backgroundColor:
                                                               primaryColorDark),
                                                       onPressed: () async {
-                                                        if (reasonCtrl.text
+                                                         if (reasonCtrl.text
                                                                 .trim()
                                                                 .isEmpty) {
                                                           Fluttertoast.showToast(
-                                                              msg:
-                                                                  "Please enter ${isClockIn ? 'late attendance' : (shiftStatus.isEarly ? 'early checkout' : 'late checkout')} reason");
+                                                              msg: isClockIn
+                                                                  ? "Please enter late attendance reason"
+                                                                  : "Please enter checkout reason");
                                                           return;
                                                         }
                                                         Navigator.pop(dialogCtx);
@@ -429,13 +446,17 @@ class Dashboardpanel extends ConsumerWidget {
 
                       var inTotal = distinctList
                           .where((e) =>
-                              e.caseId!.toString().toLowerCase().contains('in'))
+                              (e.inOut != null &&
+                                  e.inOut!.trim().toUpperCase() == 'IN') ||
+                              (e.caseId != null &&
+                                  e.caseId!.trim().toUpperCase().startsWith('IN-')))
                           .length;
                       var outTotal = distinctList
-                          .where((e) => e.caseId!
-                              .toString()
-                              .toLowerCase()
-                              .contains('out'))
+                          .where((e) =>
+                              (e.inOut != null &&
+                                  e.inOut!.trim().toUpperCase() == 'OUT') ||
+                              (e.caseId != null &&
+                                  e.caseId!.trim().toUpperCase().startsWith('OUT-')))
                           .length;
 
                       return InkWell(
@@ -630,7 +651,7 @@ class Dashboardpanel extends ConsumerWidget {
                                                                                   ),
                                                                                   Expanded(
                                                                                     child: Text(
-                                                                                      "${distinctList[index].caseId.toString().toLowerCase().contains('out') ? currentOutStatus : currentInStatus}",
+                                                                                      "${((distinctList[index].inOut?.trim().toUpperCase() == 'OUT') || (distinctList[index].caseId != null && distinctList[index].caseId!.trim().toUpperCase().startsWith('OUT-'))) ? currentOutStatus : currentInStatus}",
                                                                                       textAlign: TextAlign.start,
                                                                                       style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: Adaptive.sp(14)),
                                                                                     ),
@@ -676,7 +697,7 @@ class Dashboardpanel extends ConsumerWidget {
                                                       child: Text.rich(
                                                     TextSpan(
                                                       text:
-                                                          "${distinctList[index].caseId.toString().toLowerCase().contains('out') ? "OUT" : 'IN'}",
+                                                          "${((distinctList[index].inOut?.trim().toUpperCase() == 'OUT') || (distinctList[index].caseId != null && distinctList[index].caseId!.trim().toUpperCase().startsWith('OUT-'))) ? "OUT" : 'IN'}",
                                                     ),
                                                     textAlign: TextAlign.center,
                                                     style: TextStyle(
@@ -690,7 +711,7 @@ class Dashboardpanel extends ConsumerWidget {
                                                       child: Text.rich(
                                                     TextSpan(
                                                       text:
-                                                          "${distinctList[index].caseId.toString().toLowerCase().contains('out') ? currentOutStatus.toString().replaceAll('Add', '') : currentInStatus.toString().replaceAll('Add', '')}",
+                                                          "${((distinctList[index].inOut?.trim().toUpperCase() == 'OUT') || (distinctList[index].caseId != null && distinctList[index].caseId!.trim().toUpperCase().startsWith('OUT-'))) ? currentOutStatus.toString().replaceAll('Add', '') : currentInStatus.toString().replaceAll('Add', '')}",
                                                     ),
                                                     textAlign: TextAlign.center,
                                                     style: TextStyle(

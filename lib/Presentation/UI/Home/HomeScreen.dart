@@ -194,22 +194,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       await requestLocationPermission();
       var position = await Geolocator.getCurrentPosition();
 
-      ref.watch(distanceProvider.notifier).state = Geolocator.distanceBetween(
-              ref.watch(locationProvider)?.latitude ?? 0.0,
-              ref.watch(locationProvider)?.longitude ?? 0.0,
+      ref.read(locationProvider.notifier).state = position;
+      ref.read(distanceProvider.notifier).state = Geolocator.distanceBetween(
+              position.latitude,
+              position.longitude,
               double.tryParse(
-                      ref.watch(sharedUtilityProvider).getUser()?.attenLat ??
+                      ref.read(sharedUtilityProvider).getUser()?.attenLat ??
                           "0.0") ??
                   0.0,
               double.tryParse(
-                      ref.watch(sharedUtilityProvider).getUser()?.attenLong ??
+                      ref.read(sharedUtilityProvider).getUser()?.attenLong ??
                           "0.0") ??
                   0.0)
           .toString();
-      ref.watch(locationProvider.notifier).state = position;
       placemarkFromCoordinates(position.latitude, position.longitude)
           .then((placemarks) {
-        ref.watch(addressProvider.notifier).state =
+        ref.read(addressProvider.notifier).state =
             "${placemarks.first.name} ${placemarks.first.street} ${placemarks.first.locality} ${placemarks.first.administrativeArea}";
       }).catchError((_) {});
 
@@ -387,7 +387,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           .toLowerCase()
                           .replaceAll(" ", '')
                           .contains('guard')
-                      ? CupertinoListSection(
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             ListTile(
                               title: Text(
@@ -400,9 +401,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       ? const Icon(Icons.person)
                                       : CircleAvatar(
                                           radius: Adaptive.sp(16),
-                                          foregroundImage: NetworkImage(
-                                            "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
-                                          ),
+                                          foregroundImage: (ref.watch(sharedUtilityProvider).getUser()?.passportImage != null &&
+                                                  ref.watch(sharedUtilityProvider).getUser()!.passportImage!.toString().trim().isNotEmpty)
+                                              ? NetworkImage(
+                                                  "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
+                                                )
+                                              : null,
+                                          onForegroundImageError: (exception, stackTrace) {},
+                                          child: const Icon(Icons.person),
                                         ),
                               onTap: () => _navigateWithClockCheck('profile'),
                             ),
@@ -436,6 +442,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                                   _navigateWithClockCheck('employee_questions'),
                             ),
+                            // CupertinoListTile(
+                            //   title: Text(
+                            //     'Warehouse Onboarding',
+                            //     style: TextStyle(fontSize: Adaptive.sp(16)),
+                            //   ),
+                            //   leading: const Icon(
+                            //     Icons.warehouse_rounded,
+                            //     color: primaryColor,
+                            //   ),
+                            //   onTap: () =>
+                            //       _navigateWithClockCheck('warehouse_onboarding'),
+                            // ),
                             ExpansionTile(
                               shape: const Border(
                                   bottom: BorderSide(color: primaryColorDark)),
@@ -548,8 +566,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             )
                           ],
                         )
-                      : CupertinoListSection(
-                          backgroundColor: Colors.white,
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             ListTile(
                               title: Text(
@@ -564,9 +582,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       ? const Icon(Icons.person)
                                       : CircleAvatar(
                                           radius: Adaptive.sp(16),
-                                          foregroundImage: NetworkImage(
-                                            "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
-                                          ),
+                                          foregroundImage: (ref.watch(sharedUtilityProvider).getUser()?.passportImage != null &&
+                                                  ref.watch(sharedUtilityProvider).getUser()!.passportImage!.toString().trim().isNotEmpty)
+                                              ? NetworkImage(
+                                                  "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
+                                                )
+                                              : null,
+                                          onForegroundImageError: (exception, stackTrace) {},
+                                          child: const Icon(Icons.person),
                                         ),
                               onTap: () => _navigateWithClockCheck('profile'),
                             ),
@@ -611,6 +634,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 trailing: const CupertinoListTileChevron(),
                                 onTap: () =>
                                     _navigateWithClockCheck('employee_questions')),
+                            // ListTile(
+                            //     title: Text(
+                            //       'Warehouse Onboarding',
+                            //       style: TextStyle(fontSize: Adaptive.sp(16)),
+                            //     ),
+                            //     leading: const Icon(
+                            //       Icons.warehouse_rounded,
+                            //       color: primaryColor,
+                            //     ),
+                            //     trailing: const CupertinoListTileChevron(),
+                            //     onTap: () =>
+                            //         _navigateWithClockCheck('warehouse_onboarding')),
                             ExpansionTile(
                               shape: const Border(
                                   bottom: BorderSide(color: primaryColorDark)),

@@ -80,6 +80,7 @@ import 'package:emp_apnagodam/Presentation/UI/Voucher/VoucherList.dart';
 import 'package:emp_apnagodam/Presentation/UI/Advances/WithdrawRequestsScreen.dart';
 import 'package:emp_apnagodam/Presentation/UI/WhsScreens/WhsIn.dart';
 import 'package:emp_apnagodam/Presentation/UI/WhsScreens/WhsOut.dart';
+import 'package:emp_apnagodam/Presentation/UI/Onboarding/WarehouseOnboardingScreen.dart';
 import 'package:emp_apnagodam/Presentation/Widgets/widgets.dart';
 import 'package:emp_apnagodam/Presentation/utils/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -275,6 +276,11 @@ var goRouterProvider = StateProvider((ref) => GoRouter(
                 name: 'withdraw_requests',
                 path: "withdraw_requests",
                 builder: (context, state) => Withdrawrequestsscreen(),
+              ),
+              GoRoute(
+                name: 'warehouse_onboarding',
+                path: "warehouse_onboarding",
+                builder: (context, state) => const WarehouseOnboardingScreen(),
               ),
 
               GoRoute(

@@ -11,10 +11,12 @@ import 'package:emp_apnagodam/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:zoom_pinch_overlay/zoom_pinch_overlay.dart';
 
+import '../../../Data/Models/CheckForLateResponse.dart';
 import '../../../Data/SharedPrefs/SharedUtility.dart';
 import '../../../Domain/Attendance/AttendanceService.dart';
 import '../../../Domain/Authentication/AuthenticationService.dart';
@@ -34,6 +36,30 @@ class _AttendanceMarkingScreenState
   var attendanceImageProvider = StateProvider<File?>((ref) => null);
   var purposeController = TextEditingController();
   ImagePicker imagePicker = ImagePicker();
+
+  Future<void> _pickAndStampImage({ImageSource source = ImageSource.camera}) async {
+    try {
+      final value = await pickImage(source: source);
+      if (value != null) {
+        showLoaderDialog(context);
+        String? stamped;
+        try {
+          stamped = await createStampedImageFile(value, ref);
+        } catch (e) {
+          debugPrint("Watermark failed: $e");
+        } finally {
+          hideLoaderDialog(context);
+        }
+        final finalPath = stamped ?? value.path;
+        ref.read(attendanceImageProvider.notifier).state = File(finalPath);
+      }
+    } catch (e, s) {
+      debugPrintStack(stackTrace: s);
+      if (mounted) {
+        showErrorDialog(context, "Could not open camera: $e");
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -97,32 +123,7 @@ class _AttendanceMarkingScreenState
                                                 ],
                                               )
                                             : InkWell(
-                                                onTap: () async {
-                                                  showLoaderDialog(context);
-                                                  try {
-                                                    final value = await pickImage();
-                                                    if (value != null) {
-                                                      String? stamped;
-                                                      try {
-                                                        stamped = await createStampedImageFile(value, ref);
-                                                      } catch (e) {
-                                                        debugPrint("Watermark failed: $e");
-                                                      }
-                                                      final finalPath = stamped ?? value.path;
-                                                      ref
-                                                          .read(
-                                                              attendanceImageProvider
-                                                                  .notifier)
-                                                          .state = File(finalPath);
-                                                    }
-                                                  } catch (e, s) {
-                                                    debugPrintStack(
-                                                      stackTrace: s,
-                                                    );
-                                                  } finally {
-                                                    hideLoaderDialog(context);
-                                                  }
-                                                },
+                                                onTap: () => _pickAndStampImage(source: ImageSource.camera),
                                                 child: ZoomOverlay(
                                                   modalBarrierColor:
                                                       Colors.black12,
@@ -158,337 +159,428 @@ class _AttendanceMarkingScreenState
                                               ),
                                       ),
                                     ),
-                                    onTap: () async {
-                                      showLoaderDialog(context);
-                                      try {
-                                        final value = await pickImage(
-                                          source: ImageSource.camera,
-                                        );
-                                        if (value != null) {
-                                          String? stamped;
-                                          try {
-                                            stamped = await createStampedImageFile(value, ref);
-                                          } catch (e) {
-                                            debugPrint("Watermark failed: $e");
-                                          }
-                                          final finalPath = stamped ?? value.path;
-                                          ref
-                                              .read(
-                                                  attendanceImageProvider
-                                                      .notifier)
-                                              .state = File(finalPath);
-                                        }
-                                      } catch (e, s) {
-                                        debugPrintStack(
-                                          stackTrace: s,
-                                        );
-                                      } finally {
-                                        hideLoaderDialog(context);
-                                      }
-                                    },
+                                    onTap: () => _pickAndStampImage(source: ImageSource.camera),
                                   ),
                                 ),
                                  const SizedBox(
                                    height: 10,
                                  ),
 
-                                  RowSuper(fitHorizontally: true, children: [
-                                   Padding(
-                                     padding: const Pad(all: 10),
-                                     child: AnimatedButton(
-                                       height: 50,
-                                       enabled: data.clockStatus == 1,
-                                       color: data.clockStatus == 1
-                                           ? primaryColorDark
-                                           : Colors.grey,
-                                       isOutline: true,
-                                       isMultiColor: true,
-                                       colors: [
-                                         data.clockStatus == 1
-                                             ? primaryColorDark
-                                             : Colors.grey,
-                                         data.clockStatus == 1
-                                             ? primaryColorDark
-                                             : Colors.grey
-                                       ],
-                                       borderWidth: 1,
-                                       onTap: () async {
-                                           if (ref.watch(attendanceImageProvider) == null) {
-                                             Fluttertoast.showToast(msg: "Please Select Image");
-                                             return;
-                                           }
-
-                                            final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
-                                            final shiftStart = profileData?.shiftStart;
-                                            final shiftStatus = getShiftAttendanceStatus(shiftStart, isCheckIn: true);
-
-                                            Future<void> submitClockIn(String purpose) async {
-                                              showLoaderDialog(context);
-                                              try {
-                                                // 1. Hit late reason API
-                                                try {
-                                                  await ref.read(checkForLateProvider.future);
-                                                } catch (_) {}
-
-                                                // 2. Hit attendance API
-                                                var value = await ref.read(postAttendanceV2Provider(
-                                                  userPurpose: purpose,
-                                                  clockStatus: '1',
-                                                  distance: ref.read(distanceProvider).toString(),
-                                                  image: ref.read(attendanceImageProvider),
-                                                  lat: '${ref.read(locationProvider)?.latitude}',
-                                                  long: '${ref.read(locationProvider)?.longitude}',
-                                                ).future);
-
-                                                hideLoaderDialog(context);
-                                                if (value['status'].toString() == "1") {
-                                                  ref.invalidate(attendanceStatusProvider);
-                                                  ref.invalidate(attendanceImageProvider);
-                                                  ref.read(goRouterProvider).pop();
-                                                }
-                                                Fluttertoast.showToast(msg: '${value['message']}');
-                                              } catch (e) {
-                                                hideLoaderDialog(context);
-                                              }
-                                            }
-
-                                            if (!shiftStatus.requiresReason) {
-                                              await submitClockIn("");
-                                            } else {
-                                              TextEditingController dialogReasonCtrl = TextEditingController();
-
+                                   RowSuper(fitHorizontally: true, children: [
+                                    Padding(
+                                      padding: const Pad(all: 10),
+                                      child: AnimatedButton(
+                                        height: 50,
+                                        enabled: data.clockStatus?.toString() != "2",
+                                        color: data.clockStatus?.toString() != "2"
+                                            ? primaryColorDark
+                                            : Colors.grey,
+                                        isOutline: true,
+                                        isMultiColor: true,
+                                        colors: [
+                                          data.clockStatus?.toString() != "2"
+                                              ? primaryColorDark
+                                              : Colors.grey,
+                                          data.clockStatus?.toString() != "2"
+                                              ? primaryColorDark
+                                              : Colors.grey
+                                        ],
+                                        borderWidth: 1,
+                                        onTap: () async {
+                                            if (ref.read(attendanceImageProvider) == null) {
                                               showDialog(
                                                 context: context,
-                                                barrierDismissible: false,
-                                                builder: (dialogCtx) => AlertDialog(
-                                                  title: const Text("Late Checkin Reason"),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                  content: Column(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                builder: (alertCtx) => AlertDialog(
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(12)),
+                                                  title: const Row(
                                                     children: [
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        margin: const EdgeInsets.only(bottom: 8),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.amber.shade50,
-                                                          borderRadius: BorderRadius.circular(8),
-                                                          border: Border.all(color: Colors.amber.shade300),
-                                                        ),
-                                                        child: Row(
-                                                          children: [
-                                                            Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.amber.shade800),
-                                                            const SizedBox(width: 6),
-                                                            Expanded(
-                                                              child: Text(
-                                                                shiftStatus.label.isNotEmpty
-                                                                    ? shiftStatus.label
-                                                                    : "Shift Start: ${shiftStart ?? 'Scheduled'} (Late Check-in)",
-                                                                style: TextStyle(
-                                                                  fontSize: Adaptive.sp(11),
-                                                                  color: Colors.amber.shade900,
-                                                                  fontWeight: FontWeight.w600,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      TextField(
-                                                        controller: dialogReasonCtrl,
-                                                        maxLines: 3,
-                                                        decoration: const InputDecoration(
-                                                          labelText: "Reason for Late Attendance *",
-                                                          hintText: "Enter reason here...",
-                                                          border: OutlineInputBorder(),
-                                                        ),
+                                                      Icon(Icons.camera_alt_rounded,
+                                                          color: primaryColorDark),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        "Photo Required",
+                                                        style: TextStyle(
+                                                            fontSize: 16, fontWeight: FontWeight.bold),
                                                       ),
                                                     ],
                                                   ),
+                                                  content: const Text(
+                                                    "Please capture an attendance photo before clocking in.",
+                                                    style: TextStyle(fontSize: 14),
+                                                  ),
                                                   actions: [
                                                     TextButton(
-                                                      onPressed: () => Navigator.pop(dialogCtx),
+                                                      onPressed: () => Navigator.pop(alertCtx),
                                                       child: const Text("Cancel"),
                                                     ),
-                                                    ElevatedButton(
-                                                      style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
-                                                      onPressed: () async {
-                                                        if (dialogReasonCtrl.text.trim().isEmpty) {
-                                                          Fluttertoast.showToast(msg: "Please enter late attendance reason");
-                                                          return;
-                                                        }
-                                                        Navigator.pop(dialogCtx);
-                                                        await submitClockIn(dialogReasonCtrl.text.trim());
+                                                    ElevatedButton.icon(
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: primaryColorDark,
+                                                      ),
+                                                      onPressed: () {
+                                                        Navigator.pop(alertCtx);
+                                                        _pickAndStampImage();
                                                       },
-                                                      child: const Text("Submit", style: TextStyle(color: Colors.white)),
+                                                      icon: const Icon(Icons.camera_alt_outlined,
+                                                          color: Colors.white, size: 18),
+                                                      label: const Text(
+                                                        "Take Photo",
+                                                        style: TextStyle(color: Colors.white),
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
                                               );
-                                            }
-                                          },
-                                       child: Text(
-                                         'Clock In',
-                                         textAlign: TextAlign.center,
-                                         style: TextStyle(
-                                             color: Colors.white,
-                                             fontSize: Adaptive.sp(14),
-                                             fontWeight: FontWeight.w800),
-                                       ),
-                                     ),
-                                   ),
-                                   const SizedBox(
-                                     width: 10,
-                                   ),
-                                   Padding(
-                                     padding: const Pad(all: 10),
-                                     child: AnimatedButton(
-                                       height: 50,
-                                       enabled: data.clockStatus == 2,
-                                       color: data.clockStatus == 2
-                                           ? primaryColorDark
-                                           : Colors.grey,
-                                       isOutline: true,
-                                       isMultiColor: true,
-                                       colors: [
-                                         data.clockStatus == 2
-                                             ? primaryColorDark
-                                             : Colors.grey,
-                                         data.clockStatus == 2
-                                             ? primaryColorDark
-                                             : Colors.grey
-                                       ],
-                                       borderWidth: 1,
-                                       onTap: () async {
-                                            if (ref.watch(attendanceImageProvider) == null) {
-                                              Fluttertoast.showToast(msg: "Please Select Image");
                                               return;
                                             }
 
-                                             final profileData = ref.read(profileDataProvider).valueOrNull?.profileData;
-                                             final shiftEnd = profileData?.shiftEnd;
-                                             final shiftStatus = getShiftAttendanceStatus(shiftEnd, isCheckIn: false);
-
-                                            Future<void> submitClockOut(String purpose) async {
                                               showLoaderDialog(context);
+
+                                              // 1. Hit lateReason API before checkin
+                                              CheckForLateResponse? lateCheck;
                                               try {
-                                                // 1. Hit late reason API
-                                                try {
-                                                  await ref.read(checkForLateProvider.future);
-                                                } catch (_) {}
-
-                                                // 2. Hit attendance API
-                                                var value = await ref.read(postAttendanceV2Provider(
-                                                  userPurpose: purpose,
-                                                  clockStatus: '2',
-                                                  distance: ref.read(distanceProvider).toString(),
-                                                  image: ref.read(attendanceImageProvider),
-                                                  lat: '${ref.read(locationProvider)?.latitude}',
-                                                  long: '${ref.read(locationProvider)?.longitude}',
-                                                ).future);
-
-                                                hideLoaderDialog(context);
-                                                if (value['status'].toString() == "1") {
-                                                  ref.invalidate(attendanceStatusProvider);
-                                                  ref.invalidate(attendanceImageProvider);
-                                                  ref.read(goRouterProvider).pop();
-                                                }
-                                                Fluttertoast.showToast(msg: '${value['message']}');
+                                                ref.invalidate(checkForLateProvider);
+                                                lateCheck = await ref.read(checkForLateProvider.future);
                                               } catch (e) {
-                                                hideLoaderDialog(context);
+                                                debugPrint("Error checking lateReason: $e");
                                               }
-                                            }
 
-                                            if (!shiftStatus.requiresReason) {
-                                              await submitClockOut("");
-                                            } else {
-                                              TextEditingController dialogReasonCtrl = TextEditingController();
+                                              hideLoaderDialog(context);
 
-                                              showDialog(
-                                                context: context,
-                                                barrierDismissible: false,
-                                                builder: (dialogCtx) => AlertDialog(
-                                                  title: Text(shiftStatus.isEarly
-                                                      ? "Early Checkout Reason"
-                                                      : "Late Checkout Reason"),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                  content: Column(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        margin: const EdgeInsets.only(bottom: 8),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.amber.shade50,
-                                                          borderRadius: BorderRadius.circular(8),
-                                                          border: Border.all(color: Colors.amber.shade300),
+                                              Future<void> submitClockIn(String purpose) async {
+                                                showLoaderDialog(context);
+                                                try {
+                                                  // Ensure location is valid
+                                                  var currentLoc = ref.read(locationProvider);
+                                                  if (currentLoc == null) {
+                                                    try {
+                                                      currentLoc = await Geolocator.getCurrentPosition(
+                                                          timeLimit: const Duration(seconds: 5));
+                                                      ref.read(locationProvider.notifier).state = currentLoc;
+                                                    } catch (_) {
+                                                      try {
+                                                        currentLoc = await Geolocator.getLastKnownPosition();
+                                                        if (currentLoc != null) {
+                                                          ref.read(locationProvider.notifier).state = currentLoc;
+                                                        }
+                                                      } catch (_) {}
+                                                    }
+                                                  }
+
+                                                  var dist = ref.read(distanceProvider);
+                                                  if ((dist == null || dist.toString() == "0.0") && currentLoc != null) {
+                                                    final user = ref.read(sharedUtilityProvider).getUser();
+                                                    final attenLat = double.tryParse(user?.attenLat ?? "0.0") ?? 0.0;
+                                                    final attenLong = double.tryParse(user?.attenLong ?? "0.0") ?? 0.0;
+                                                    if (attenLat != 0.0 && attenLong != 0.0) {
+                                                      dist = Geolocator.distanceBetween(
+                                                        currentLoc.latitude,
+                                                        currentLoc.longitude,
+                                                        attenLat,
+                                                        attenLong,
+                                                      ).toString();
+                                                      ref.read(distanceProvider.notifier).state = dist;
+                                                    }
+                                                  }
+
+                                                  // Hit attendance API
+                                                  var value = await ref.read(postAttendanceV2Provider(
+                                                    userPurpose: purpose,
+                                                    clockStatus: '1',
+                                                    distance: dist?.toString() ?? "0.0",
+                                                    image: ref.read(attendanceImageProvider),
+                                                    lat: currentLoc != null ? '${currentLoc.latitude}' : '0.0',
+                                                    long: currentLoc != null ? '${currentLoc.longitude}' : '0.0',
+                                                  ).future);
+
+                                                  hideLoaderDialog(context);
+                                                  if (value['status'].toString() == "1") {
+                                                    ref.invalidate(attendanceStatusProvider);
+                                                    ref.invalidate(attendanceImageProvider);
+                                                    ref.read(goRouterProvider).pop();
+                                                    Fluttertoast.showToast(msg: '${value['message']}');
+                                                  } else {
+                                                    showErrorDialog(
+                                                        context, '${value['message'] ?? "Unable to Clock In"}');
+                                                  }
+                                                } catch (e) {
+                                                  hideLoaderDialog(context);
+                                                  showErrorDialog(context, "Clock In failed: $e");
+                                                }
+                                              }
+
+                                              // If ask_reason == 1 then show, if 0 then not show
+                                              bool shouldAskReason = lateCheck != null &&
+                                                  (lateCheck.askReason == 1 || lateCheck.askReason.toString() == "1");
+
+                                              if (!shouldAskReason) {
+                                                await submitClockIn("");
+                                              } else {
+                                                TextEditingController dialogReasonCtrl = TextEditingController();
+
+                                                showDialog(
+                                                  context: context,
+                                                  barrierDismissible: false,
+                                                  builder: (dialogCtx) => AlertDialog(
+                                                    title: const Text("Attendance Reason"),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                    content: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        TextField(
+                                                          controller: dialogReasonCtrl,
+                                                          maxLines: 3,
+                                                          decoration: const InputDecoration(
+                                                            labelText: "Reason for Late Attendance *",
+                                                            hintText: "Enter reason here...",
+                                                            border: OutlineInputBorder(),
+                                                          ),
                                                         ),
-                                                        child: Row(
-                                                          children: [
-                                                            Icon(Icons.access_time_filled_rounded, size: 16, color: Colors.amber.shade800),
-                                                            const SizedBox(width: 6),
-                                                            Expanded(
-                                                              child: Text(
-                                                                shiftStatus.label.isNotEmpty
-                                                                    ? shiftStatus.label
-                                                                    : "Shift End: ${shiftEnd ?? 'Scheduled'} (${shiftStatus.isEarly ? 'Early Checkout' : 'Late Checkout'})",
-                                                                style: TextStyle(
-                                                                  fontSize: Adaptive.sp(11),
-                                                                  color: Colors.amber.shade900,
-                                                                  fontWeight: FontWeight.w600,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
+                                                      ],
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed: () => Navigator.pop(dialogCtx),
+                                                        child: const Text("Cancel"),
                                                       ),
-                                                      TextField(
-                                                        controller: dialogReasonCtrl,
-                                                        maxLines: 3,
-                                                        decoration: InputDecoration(
-                                                          labelText: shiftStatus.isEarly
-                                                              ? "Reason for Early Checkout *"
-                                                              : "Reason for Late Checkout *",
-                                                          hintText: "Enter reason here...",
-                                                          border: const OutlineInputBorder(),
-                                                        ),
+                                                      ElevatedButton(
+                                                        style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
+                                                        onPressed: () async {
+                                                          if (dialogReasonCtrl.text.trim().isEmpty) {
+                                                            Fluttertoast.showToast(msg: "Please enter late attendance reason");
+                                                            return;
+                                                          }
+                                                          Navigator.pop(dialogCtx);
+                                                          await submitClockIn(dialogReasonCtrl.text.trim());
+                                                        },
+                                                        child: const Text("Submit", style: TextStyle(color: Colors.white)),
                                                       ),
                                                     ],
                                                   ),
-                                                  actions: [
-                                                    TextButton(
-                                                      onPressed: () => Navigator.pop(dialogCtx),
-                                                      child: const Text("Cancel"),
-                                                    ),
-                                                    ElevatedButton(
-                                                      style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
-                                                      onPressed: () async {
-                                                        if (dialogReasonCtrl.text.trim().isEmpty) {
-                                                          Fluttertoast.showToast(
-                                                              msg: "Please enter ${shiftStatus.isEarly ? 'early checkout' : 'late checkout'} reason");
-                                                          return;
-                                                        }
-                                                        Navigator.pop(dialogCtx);
-                                                        await submitClockOut(dialogReasonCtrl.text.trim());
-                                                      },
-                                                      child: const Text("Submit", style: TextStyle(color: Colors.white)),
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                            }
-                                          },
-                                       child: Text(
-                                         'Clock Out',
-                                         textAlign: TextAlign.center,
-                                         style: TextStyle(
-                                             color: Colors.white,
-                                             fontSize: Adaptive.sp(14),
-                                             fontWeight: FontWeight.w800),
-                                       ),
-                                     ),
-                                   )
+                                                );
+                                              }
+                                            },
+                                        child: Text(
+                                          'Clock In',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: Adaptive.sp(14),
+                                              fontWeight: FontWeight.w800),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(
+                                      width: 10,
+                                    ),
+                                    Padding(
+                                      padding: const Pad(all: 10),
+                                      child: AnimatedButton(
+                                        height: 50,
+                                        enabled: data.clockStatus?.toString() == "2",
+                                        color: data.clockStatus?.toString() == "2"
+                                            ? primaryColorDark
+                                            : Colors.grey,
+                                        isOutline: true,
+                                        isMultiColor: true,
+                                        colors: [
+                                          data.clockStatus?.toString() == "2"
+                                              ? primaryColorDark
+                                              : Colors.grey,
+                                          data.clockStatus?.toString() == "2"
+                                              ? primaryColorDark
+                                              : Colors.grey
+                                        ],
+                                        borderWidth: 1,
+                                        onTap: () async {
+                                             if (ref.read(attendanceImageProvider) == null) {
+                                               showDialog(
+                                                 context: context,
+                                                 builder: (alertCtx) => AlertDialog(
+                                                   shape: RoundedRectangleBorder(
+                                                       borderRadius: BorderRadius.circular(12)),
+                                                   title: const Row(
+                                                     children: [
+                                                       Icon(Icons.camera_alt_rounded,
+                                                           color: primaryColorDark),
+                                                       SizedBox(width: 8),
+                                                       Text(
+                                                         "Photo Required",
+                                                         style: TextStyle(
+                                                             fontSize: 16, fontWeight: FontWeight.bold),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                   content: const Text(
+                                                     "Please capture an attendance photo before clocking out.",
+                                                     style: TextStyle(fontSize: 14),
+                                                   ),
+                                                   actions: [
+                                                     TextButton(
+                                                       onPressed: () => Navigator.pop(alertCtx),
+                                                       child: const Text("Cancel"),
+                                                     ),
+                                                     ElevatedButton.icon(
+                                                       style: ElevatedButton.styleFrom(
+                                                         backgroundColor: primaryColorDark,
+                                                       ),
+                                                       onPressed: () {
+                                                         Navigator.pop(alertCtx);
+                                                         _pickAndStampImage();
+                                                       },
+                                                       icon: const Icon(Icons.camera_alt_outlined,
+                                                           color: Colors.white, size: 18),
+                                                       label: const Text(
+                                                         "Take Photo",
+                                                         style: TextStyle(color: Colors.white),
+                                                       ),
+                                                     ),
+                                                   ],
+                                                 ),
+                                               );
+                                               return;
+                                             }
+
+                                              showLoaderDialog(context);
+
+                                              // 1. Hit lateReason API before checkout
+                                              CheckForLateResponse? lateCheck;
+                                              try {
+                                                ref.invalidate(checkForLateProvider);
+                                                lateCheck = await ref.read(checkForLateProvider.future);
+                                              } catch (e) {
+                                                debugPrint("Error checking lateReason: $e");
+                                              }
+
+                                              hideLoaderDialog(context);
+
+                                             Future<void> submitClockOut(String purpose) async {
+                                               showLoaderDialog(context);
+                                               try {
+                                                 // Ensure location is valid
+                                                 var currentLoc = ref.read(locationProvider);
+                                                 if (currentLoc == null) {
+                                                   try {
+                                                     currentLoc = await Geolocator.getCurrentPosition(
+                                                         timeLimit: const Duration(seconds: 5));
+                                                     ref.read(locationProvider.notifier).state = currentLoc;
+                                                   } catch (_) {
+                                                     try {
+                                                       currentLoc = await Geolocator.getLastKnownPosition();
+                                                       if (currentLoc != null) {
+                                                         ref.read(locationProvider.notifier).state = currentLoc;
+                                                       }
+                                                     } catch (_) {}
+                                                   }
+                                                 }
+
+                                                 var dist = ref.read(distanceProvider);
+                                                 if ((dist == null || dist.toString() == "0.0") && currentLoc != null) {
+                                                   final user = ref.read(sharedUtilityProvider).getUser();
+                                                   final attenLat = double.tryParse(user?.attenLat ?? "0.0") ?? 0.0;
+                                                   final attenLong = double.tryParse(user?.attenLong ?? "0.0") ?? 0.0;
+                                                   if (attenLat != 0.0 && attenLong != 0.0) {
+                                                     dist = Geolocator.distanceBetween(
+                                                       currentLoc.latitude,
+                                                       currentLoc.longitude,
+                                                       attenLat,
+                                                       attenLong,
+                                                     ).toString();
+                                                     ref.read(distanceProvider.notifier).state = dist;
+                                                   }
+                                                 }
+
+                                                 // Hit attendance API
+                                                 var value = await ref.read(postAttendanceV2Provider(
+                                                   userPurpose: purpose,
+                                                   clockStatus: '2',
+                                                   distance: dist?.toString() ?? "0.0",
+                                                   image: ref.read(attendanceImageProvider),
+                                                   lat: currentLoc != null ? '${currentLoc.latitude}' : '0.0',
+                                                   long: currentLoc != null ? '${currentLoc.longitude}' : '0.0',
+                                                 ).future);
+
+                                                 hideLoaderDialog(context);
+                                                 if (value['status'].toString() == "1") {
+                                                   ref.invalidate(attendanceStatusProvider);
+                                                   ref.invalidate(attendanceImageProvider);
+                                                   ref.read(goRouterProvider).pop();
+                                                   Fluttertoast.showToast(msg: '${value['message']}');
+                                                 } else {
+                                                   showErrorDialog(
+                                                       context, '${value['message'] ?? "Unable to Clock Out"}');
+                                                 }
+                                               } catch (e) {
+                                                 hideLoaderDialog(context);
+                                                 showErrorDialog(context, "Clock Out failed: $e");
+                                               }
+                                             }
+
+                                              // If ask_reason == 1 then show, if 0 then not show
+                                              bool shouldAskReason = lateCheck != null &&
+                                                  (lateCheck.askReason == 1 || lateCheck.askReason.toString() == "1");
+
+                                              if (!shouldAskReason) {
+                                                await submitClockOut("");
+                                              } else {
+                                               TextEditingController dialogReasonCtrl = TextEditingController();
+
+                                               showDialog(
+                                                 context: context,
+                                                 barrierDismissible: false,
+                                                 builder: (dialogCtx) => AlertDialog(
+                                                   title: const Text("Attendance Reason"),
+                                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                   content: Column(
+                                                     mainAxisSize: MainAxisSize.min,
+                                                     crossAxisAlignment: CrossAxisAlignment.start,
+                                                     children: [
+                                                       TextField(
+                                                         controller: dialogReasonCtrl,
+                                                         maxLines: 3,
+                                                         decoration: const InputDecoration(
+                                                           labelText: "Reason for Checkout *",
+                                                           hintText: "Enter reason here...",
+                                                           border: OutlineInputBorder(),
+                                                         ),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                   actions: [
+                                                     TextButton(
+                                                       onPressed: () => Navigator.pop(dialogCtx),
+                                                       child: const Text("Cancel"),
+                                                     ),
+                                                     ElevatedButton(
+                                                       style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
+                                                       onPressed: () async {
+                                                          if (dialogReasonCtrl.text.trim().isEmpty) {
+                                                            Fluttertoast.showToast(
+                                                                msg: "Please enter checkout reason");
+                                                            return;
+                                                          }
+                                                         Navigator.pop(dialogCtx);
+                                                         await submitClockOut(dialogReasonCtrl.text.trim());
+                                                       },
+                                                       child: const Text("Submit", style: TextStyle(color: Colors.white)),
+                                                     ),
+                                                   ],
+                                                 ),
+                                               );
+                                             }
+                                           },
+                                        child: Text(
+                                          'Clock Out',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: Adaptive.sp(14),
+                                              fontWeight: FontWeight.w800),
+                                        ),
+                                      ),
+                                    ),
                                  ]),
                               ]),
                         ),

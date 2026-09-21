@@ -36,12 +36,17 @@ class OptionsScreen extends ConsumerWidget {
                     style: TextStyle(fontSize: Adaptive.sp(16)),
                   ),
                   leading: ref.watch(sharedUtilityProvider).getUser() == null
-                      ? Icon(Icons.person)
+                      ? const Icon(Icons.person)
                       : CircleAvatar(
                           radius: Adaptive.sp(16),
-                          foregroundImage: NetworkImage(
-                            "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/}${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
-                          ),
+                          foregroundImage: (ref.watch(sharedUtilityProvider).getUser()?.passportImage != null &&
+                                  ref.watch(sharedUtilityProvider).getUser()!.passportImage!.toString().trim().isNotEmpty)
+                              ? NetworkImage(
+                                  "${ref.watch(dioProvider).options.baseUrl}resources/assets/upload/employees/${ref.watch(sharedUtilityProvider).getUser()?.passportImage}",
+                                )
+                              : null,
+                          onForegroundImageError: (exception, stackTrace) {},
+                          child: const Icon(Icons.person),
                         ),
                   onTap: () => context.goNamed('profile'),
                 ),
